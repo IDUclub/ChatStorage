@@ -1,0 +1,11 @@
+services:
+  chat_storage_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat_storage_dev_api
+    env_file:
+      - .env.docker
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

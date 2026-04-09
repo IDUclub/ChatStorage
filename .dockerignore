@@ -1,0 +1,5 @@
+.env.development
+.pre-commit-config.yaml
+.env.development
+.env.production
+Makefile
