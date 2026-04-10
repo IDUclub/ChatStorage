@@ -9,3 +9,17 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+
+  mongo:
+    image: mongo:8.0.21-rc1-noble
+    container_name: mongo_db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: chat_history
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./docker/mongo_data:/data/db
+      - ./docker/mongo/init:/docker-entrypoint-initdb.d:ro
