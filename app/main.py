@@ -13,6 +13,7 @@ from app.depndencies.dependencies import get_app_configuration
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
     app_config = await get_app_configuration()
     logger.info(
         f"Loaded app configuration with values: {app_config.get_configuration_values()}"
