@@ -8,6 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from app.common.config.app_config import AppConfig
+from app.common.config.auth_config import AuthConfig
 
 ENV_EXTENSIONS = [
     "",
@@ -19,6 +20,96 @@ ENV_EXTENSIONS = [
     ".docker",
     ".example",
 ]
+
+
+def _get_bool(name: str, default: bool | None = None) -> bool:
+    """
+    Function returns bool value from env as python object.
+    Available values can be equal to "1", "true", "yes", "y", "on", "0", "false", "no", "n", "off".
+    Args:
+        name (str): Variable name in str format.
+        default (bool | None): Default value for env variable. Default to None.
+    Returns:
+        bool: Bool value for env from config.
+    Raises:
+        ValueError: Value error if no env received.
+    """
+
+    value = os.getenv(name)
+    if value is None:
+        if default is not None:
+            return default
+        raise ValueError(f"Environment variable '{name}' is required")
+    value = value.strip().lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(
+        f"Environment variable '{name}' must be a boolean value, got: {value}"
+    )
+
+
+def _get_int(name: str, default: int | None = None) -> int:
+    """
+    Function returns int value from env as python object.
+    Args:
+        name (str): Variable name in str format.
+        default (bool | None): Default value for env variable. Default to None.
+    Returns:
+        bool: Bool value for env from config.
+    Raises:
+        ValueError: Value error if no env received.
+    """
+
+    value = os.getenv(name)
+    if value is None:
+        if default is not None:
+            return default
+        raise ValueError(f"Environment variable '{name}' is required")
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"Environment variable '{name}' must be an integer, got: {value}"
+        ) from exc
+
+
+def _get_str(name: str, default: str | None = None) -> str:
+    """
+    Function returns string value from env as python object.
+    Args:
+        name (str): Variable name in str format.
+        default (bool | None): Default value for env variable. Default to None.
+    Returns:
+        bool: Bool value for env from config.
+    Raises:
+        ValueError: Value error if no env received.
+    """
+
+    value = os.getenv(name, default)
+    if value is None or not value.strip():
+        raise ValueError(f"Environment variable '{name}' is required")
+    return value.strip()
+
+
+def _get_list(name: str, default: list[str] | None = None) -> list[str]:
+    """
+    Function returns list value from env as python object.
+    Args:
+        name (str): Variable name in str format.
+        Env value should be presented as str, where values of list are separated by comma: "valuer_1, value_2, etc.".
+        default (bool | None): Default value for env variable. Default to None.
+    Returns:
+        bool: Bool value for env from config.
+    Raises:
+        ValueError: Value error if no env received.
+    """
+
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default or []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def try_load(env_file_extension: str) -> dict[str, tuple[str | None, str | None]]:
@@ -108,3 +199,23 @@ def load_config() -> AppConfig:
         except Exception as e:
             logger.exception(e)
             raise ValueError("No configuration found in environment variables") from e
+
+
+def load_auth_config() -> AuthConfig:
+    """
+    Function loads auth config from env or .env files.
+    Returns:
+        AuthConfig: Authentication config for app.
+    """
+
+    return AuthConfig(
+        verify=_get_bool("AUTH_VERIFY", default=True),
+        server_url=_get_str("AUTH_SERVER_URL"),
+        client_id=_get_str("AUTH_CLIENT_ID"),
+        verify_aud=_get_bool("AUTH_VERIFY_AUD", default=True),
+        valid_audiences=_get_list("AUTH_VALID_AUDIENCES", default=[]),
+        user_cache_ttl=_get_int("AUTH_USER_CACHE_TTL", default=300),
+        user_cache_size=_get_int("AUTH_USER_CACHE_SIZE", default=10_000),
+        jwks_cache_ttl=_get_int("AUTH_JWKS_CACHE_TTL", default=600),
+        timeout=_get_int("AUTH_TIMEOUT", default=5),
+    )

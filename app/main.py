@@ -8,7 +8,8 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.__version__ import APP_DESCRIPTION, APP_NAME, APP_VERSION
 from app.common.middlewares.exception_handler import ExceptionHandlerMiddleware
-from app.depndencies.dependencies import get_app_configuration
+from app.depndencies.dependencies import get_app_configuration, get_auth_configuration
+from app.routers.v1.chat_history_router import chat_history_router
 
 
 @asynccontextmanager
@@ -18,6 +19,8 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"Loaded app configuration with values: {app_config.get_configuration_values()}"
     )
+    auth_config = await get_auth_configuration()
+    logger.info(f"Loaded app configuration with values: {auth_config.__dict__}")
     yield
     logger.info("App is shutting down")
 
@@ -38,6 +41,8 @@ app.add_middleware(
 )
 app.add_middleware(ExceptionHandlerMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=100)
+
+app.include_router(chat_history_router)
 
 
 @app.get("/ping")
