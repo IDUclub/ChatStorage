@@ -7,13 +7,15 @@ import aiohttp
 from aiohttp import ClientConnectorError
 from cachetools import TTLCache
 from jose import JWTError, jwt
+from loguru import logger
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from app.common.config.auth_config import AuthConfig
 from app.common.exceptions.auth import (
-    AuthTokenExpiredError,
-    InvalidTokenSignature,
-    JWTDecodeError,
+    ChatStorageAuthDecodeError,
+    InvalidAudienceError,
+    InvalidTokenSignatureError,
+    TokenExpiredError,
 )
 
 
@@ -23,7 +25,7 @@ class AuthenticationClient:
     RETRIES = 3
 
     def __init__(self, config: AuthConfig):
-        self.config = config
+        self.config: AuthConfig = config
 
         self._jwks_cache = TTLCache(maxsize=1, ttl=config.jwks_cache_ttl)
         self._user_cache = TTLCache(
@@ -92,11 +94,11 @@ class AuthenticationClient:
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")
             if not kid:
-                raise InvalidTokenSignature()
+                raise InvalidTokenSignatureError()
 
             key = next((k for k in jwks["keys"] if k["kid"] == kid), None)
             if not key:
-                raise InvalidTokenSignature()
+                raise InvalidTokenSignatureError()
 
             payload = jwt.decode(
                 token,
@@ -113,17 +115,17 @@ class AuthenticationClient:
                 elif audiences is None:
                     audiences = []
                 if not any(aud in self.config.valid_audiences for aud in audiences):
-                    raise ValueError("Invalid audience")
+                    raise InvalidAudienceError()
 
             return payload
 
         except JWTError as exc:
             if "expired" in str(exc).lower():
-                raise AuthTokenExpiredError() from exc
-            raise InvalidTokenSignature() from exc
+                raise TokenExpiredError() from exc
+            raise InvalidTokenSignatureError() from exc
         except Exception as exc:
-            print(exc)
-            raise JWTDecodeError() from exc
+            logger.exception(exc)
+            raise ChatStorageAuthDecodeError() from exc
 
     async def process_token(self, token: str) -> dict[str, Any]:
         """Process token depending on verify flag."""
@@ -132,7 +134,7 @@ class AuthenticationClient:
         try:
             return jwt.get_unverified_claims(token)
         except Exception as exc:
-            raise JWTDecodeError() from exc
+            raise ChatStorageAuthDecodeError() from exc
 
     # ------------------------
     # MAIN METHOD

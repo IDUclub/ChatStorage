@@ -6,6 +6,8 @@ from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from app.common.exceptions.auth import AuthError
+
 
 class ExceptionHandlerMiddleware(
     BaseHTTPMiddleware
@@ -64,6 +66,13 @@ class ExceptionHandlerMiddleware(
 
         try:
             return await call_next(request)
+        except AuthError as e:
+            return JSONResponse(
+                status_code=e.status_code,
+                content={
+                    "message": e.message,
+                },
+            )
         except Exception as e:
             request_info = await self.prepare_request_info(request)
             return JSONResponse(
