@@ -2,6 +2,8 @@
 Module aimed to store app configurations.
 """
 
+from app.common.utils.path_utils import find_project_root
+
 
 class AppConfig:
     """
@@ -10,7 +12,8 @@ class AppConfig:
         MONGO_URL (str): Mongo url to access db.
         MONGO_USER (str): Mongo username to access db.
         MONGO_PASSWORD (str): Mongo user password to access db.
-        MONGO_DB (str) :Mongo db name to access data.
+        MONGO_DB (str): Mongo db name to access data.
+        PROJECT_ROOT (Path): Path to project root content folder.
     """
 
     def __init__(
@@ -31,6 +34,7 @@ class AppConfig:
             mongo_password, "MONGO_PASSWORD"
         )
         self.MONGO_DB = self.validate_init_parameter(mongo_db, "MONGO_DB")
+        self.PROJECT_ROOT = find_project_root()
 
     @staticmethod
     def validate_init_parameter(parameter: str, name: str) -> str:

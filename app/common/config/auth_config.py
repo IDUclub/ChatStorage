@@ -18,20 +18,24 @@ class AuthConfig:
 
     def __post_init__(self):
         """Ensure server URL has a valid scheme."""
+
         if not self.server_url.startswith("http"):
             self.server_url = "http://" + self.server_url
 
     @property
     def authorization_url(self) -> str:
         """Keycloak /auth URL."""
+
         return f"{self.server_url}/protocol/openid-connect/auth"
 
     @property
     def token_url(self) -> str:
         """Keycloak /token URL."""
+
         return f"{self.server_url}/protocol/openid-connect/token"
 
     @property
     def jwks_url(self) -> str:
         """Keycloak /certs URL."""
+
         return f"{self.server_url}/protocol/openid-connect/certs"

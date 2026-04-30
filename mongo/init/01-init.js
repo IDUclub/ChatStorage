@@ -1,32 +1,49 @@
 db = db.getSiblingDB("chat_history");
 
-// --------------------
-// Create collections
-// --------------------
+if (!db.getUser("mongo")) {
+  db.createUser({
+    user: "mongo",
+    pwd: "mongo",
+    roles: [{ role: "readWrite", db: "chat_history" }]
+  });
+}
+
+const uuidPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
 db.createCollection("chats", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
-      required: ["user_id", "chat_id", "created_at", "updated_at"],
+      required: ["user_id", "chat_id", "next_seq", "created_at", "updated_at"],
       additionalProperties: false,
       properties: {
         _id: {},
         user_id: {
-          bsonType: "int",
-          description: "Required int user ID"
+          bsonType: "string",
+          pattern: uuidPattern,
+          description: "Required user UUID from auth token"
         },
         chat_id: {
           bsonType: "string",
-          description: "Required chat ID"
+          pattern: uuidPattern,
+          description: "Required service-generated chat UUID"
         },
         scenario_id: {
-          bsonType: ["int", "null"],
-          description: "Optional int scenario ID"
+          bsonType: ["string", "int", "null"],
+          description: "Optional scenario identifier"
         },
         title: {
           bsonType: ["string", "null"],
           description: "Optional chat title"
+        },
+        metadata: {
+          bsonType: "object",
+          description: "Optional client or assistant metadata"
+        },
+        next_seq: {
+          bsonType: "int",
+          minimum: 1,
+          description: "Next message sequence number in this chat"
         },
         created_at: {
           bsonType: "date",
@@ -47,13 +64,33 @@ db.createCollection("messages", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
-      required: ["chat_id", "seq", "role", "parts", "created_at"],
+      required: [
+        "user_id",
+        "chat_id",
+        "message_id",
+        "seq",
+        "role",
+        "parts",
+        "created_at",
+        "updated_at"
+      ],
       additionalProperties: false,
       properties: {
         _id: {},
+        user_id: {
+          bsonType: "string",
+          pattern: uuidPattern,
+          description: "Required user UUID from auth token"
+        },
         chat_id: {
           bsonType: "string",
-          description: "Required chat ID"
+          pattern: uuidPattern,
+          description: "Required service-generated chat UUID"
+        },
+        message_id: {
+          bsonType: "string",
+          pattern: uuidPattern,
+          description: "Required service-generated message UUID"
         },
         seq: {
           bsonType: "int",
@@ -66,6 +103,7 @@ db.createCollection("messages", {
         },
         parts: {
           bsonType: "array",
+          minItems: 1,
           description: "Ordered message parts",
           items: {
             bsonType: "object",
@@ -77,7 +115,7 @@ db.createCollection("messages", {
                 minimum: 1
               },
               kind: {
-                enum: ["text", "tool_call", "status"]
+                enum: ["text", "tool_call", "tool_result", "status", "data"]
               },
               payload: {
                 bsonType: "object"
@@ -85,82 +123,20 @@ db.createCollection("messages", {
               created_at: {
                 bsonType: "date"
               }
-            },
-            oneOf: [
-              {
-                properties: {
-                  kind: { enum: ["text"] },
-                  payload: {
-                    bsonType: "object",
-                    required: ["text"],
-                    additionalProperties: false,
-                    properties: {
-                      text: { bsonType: "string" }
-                    }
-                  }
-                }
-              },
-              {
-                properties: {
-                  kind: { enum: ["tool_call"] },
-                  type: { enum: ["data", "buffers", "restrictions"] },
-                  payload: {
-                    bsonType: "object",
-                    required: ["execution_mode", "calls"],
-                    additionalProperties: false,
-                    properties: {
-                      execution_mode: {
-                        enum: ["sequential"]
-                      },
-                      calls: {
-                        bsonType: "array",
-                        minItems: 1,
-                        items: {
-                          bsonType: "object",
-                          required: ["step", "tool_name", "arguments"],
-                          additionalProperties: false,
-                          properties: {
-                            step: {
-                              bsonType: "int",
-                              minimum: 1
-                            },
-                            tool_name: {
-                              bsonType: "string"
-                            },
-                            arguments: {
-                              bsonType: "object"
-                            },
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                properties: {
-                  kind: { enum: ["status"] },
-                  payload: {
-                    bsonType: "object",
-                    required: ["status", "text"],
-                    additionalProperties: false,
-                    properties: {
-                      status: {"bsonType": "string"},
-                      text: {"bsonType": "string"}
-                    }
-                  }
-                }
-              },
-            ]
+            }
           }
+        },
+        metadata: {
+          bsonType: "object",
+          description: "Optional model, token, trace, or client metadata"
         },
         created_at: {
           bsonType: "date",
           description: "Creation date"
         },
         updated_at: {
-          bsonType: ["date", "null"],
-          description: "Optional update date"
+          bsonType: "date",
+          description: "Last update date"
         }
       }
     }
@@ -168,3 +144,10 @@ db.createCollection("messages", {
   validationAction: "error",
   validationLevel: "strict"
 });
+
+db.chats.createIndex({ user_id: 1, updated_at: -1 });
+db.chats.createIndex({ user_id: 1, chat_id: 1 }, { unique: true });
+
+db.messages.createIndex({ user_id: 1, chat_id: 1, seq: 1 }, { unique: true });
+db.messages.createIndex({ user_id: 1, chat_id: 1, message_id: 1 }, { unique: true });
+db.messages.createIndex({ user_id: 1, chat_id: 1, created_at: 1 });

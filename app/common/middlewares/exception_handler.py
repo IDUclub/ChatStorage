@@ -3,6 +3,7 @@
 import traceback
 
 from fastapi import FastAPI, Request
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -67,6 +68,13 @@ class ExceptionHandlerMiddleware(
         try:
             return await call_next(request)
         except AuthError as e:
+            logger.warning(
+                "Authentication error: method={} path={} status_code={} message={}",
+                request.method,
+                request.url.path,
+                e.status_code,
+                e.message,
+            )
             return JSONResponse(
                 status_code=e.status_code,
                 content={
@@ -75,6 +83,13 @@ class ExceptionHandlerMiddleware(
             )
         except Exception as e:
             request_info = await self.prepare_request_info(request)
+            logger.exception(
+                "Unhandled request error: method={} path={} error_type={} detail={}",
+                request.method,
+                request.url.path,
+                e.__class__.__name__,
+                str(e),
+            )
             return JSONResponse(
                 status_code=500,
                 content={
