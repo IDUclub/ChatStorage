@@ -18,6 +18,8 @@ from app.common.exceptions.auth import (
     TokenExpiredError,
 )
 
+JWKS_CACHE_KEY = "jwks"
+
 
 class AuthenticationClient:
     """Authentication client for validating jwt tokens and extract users from payload."""
@@ -70,17 +72,22 @@ class AuthenticationClient:
                 return await resp.json()
 
     async def get_jwks(self) -> dict[str, Any]:
-        """Get JWKS with caching and concurrency protection."""
-        if "jwks" in self._jwks_cache:
-            return self._jwks_cache["jwks"]
+        """Return cached JWKS document.
+
+        Cache stores the whole JWKS JSON document under JWKS_CACHE_KEY.
+        Expected JWKS shape: {"keys": [JWK, ...]}.
+        """
+
+        if JWKS_CACHE_KEY in self._jwks_cache:
+            return self._jwks_cache[JWKS_CACHE_KEY]
 
         async with self._lock:
-            if "jwks" in self._jwks_cache:
-                return self._jwks_cache["jwks"]
+            if JWKS_CACHE_KEY in self._jwks_cache:
+                return self._jwks_cache[JWKS_CACHE_KEY]
 
-            jwks = await self._fetch_jwks()
-            self._jwks_cache["jwks"] = jwks
-            return jwks
+            jwks_document = await self._fetch_jwks()
+            self._jwks_cache[JWKS_CACHE_KEY] = jwks_document
+            return jwks_document
 
     # ------------------------
     # JWT PROCESSING
@@ -89,14 +96,17 @@ class AuthenticationClient:
     async def _verify_jwt(self, token: str) -> dict[str, Any]:
         """Full JWT verification (signature + claims)."""
         try:  # pylint: disable=too-many-try-statements
-            jwks = await self.get_jwks()
+            jwks_document = await self.get_jwks()
 
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")
             if not kid:
                 raise InvalidTokenSignatureError()
 
-            key = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+            key = next(
+                (jwk for jwk in jwks_document.get("kyes", []) if jwk.get("kid") == kid),
+                None,
+            )
             if not key:
                 raise InvalidTokenSignatureError()
 

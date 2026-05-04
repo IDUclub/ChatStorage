@@ -1,5 +1,5 @@
 services:
-  chat_storage_dev:
+  chat_storage:
     build:
       context: .
       dockerfile: Dockerfile

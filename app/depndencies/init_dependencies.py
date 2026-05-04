@@ -10,7 +10,7 @@ from app.services.chat_history_service import ChatHistoryService
 def init_dependencies() -> dict:
 
     app_config: AppConfig = load_config()
-    logs_path = app_config.PROJECT_ROOT / ".log"
+    logs_path = app_config.PROJECT_ROOT / "logs" / ".log"
     init_logger(logs_path)
     auth_config: AuthConfig = load_auth_config()
     auth_client = AuthenticationClient(auth_config)

@@ -65,4 +65,5 @@ class AppConfig:
             "MONGO_USER": self.MONGO_USER,
             "MONGO_PASSWORD": self.MONGO_PASSWORD,
             "MONGO_DB": self.MONGO_DB,
+            "PROJECT_ROOT": str(self.PROJECT_ROOT),
         }
