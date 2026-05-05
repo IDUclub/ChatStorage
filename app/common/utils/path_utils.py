@@ -16,4 +16,4 @@ def resolve_logs_path(raw_path: str | None, workdir: Path) -> Path:
     logs_path = Path(raw_path.strip()).expanduser()
     if logs_path.is_absolute():  # absolute logs path
         return logs_path
-    return workdir / logs_path  # relative docs path
+    return workdir / logs_path  # relative logs path
