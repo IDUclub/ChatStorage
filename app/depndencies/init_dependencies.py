@@ -10,8 +10,7 @@ from app.services.chat_history_service import ChatHistoryService
 def init_dependencies() -> dict:
 
     app_config: AppConfig = load_config()
-    logs_path = app_config.PROJECT_ROOT / "logs" / ".log"
-    init_logger(logs_path)
+    init_logger(app_config.PATH_TO_LOG)
     auth_config: AuthConfig = load_auth_config()
     auth_client = AuthenticationClient(auth_config)
     mongo_client = create_mongo_client(app_config)
@@ -19,7 +18,6 @@ def init_dependencies() -> dict:
     chat_history_service = ChatHistoryService(mongo_db)
     return {
         "app_config": app_config,
-        "logs_path": logs_path,
         "auth_config": auth_config,
         "auth_client": auth_client,
         "mongo_client": mongo_client,

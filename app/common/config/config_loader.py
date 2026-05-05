@@ -68,7 +68,12 @@ def _get_int(name: str, default: int | None = None) -> int:
             return default
         raise ValueError(f"Environment variable '{name}' is required")
     try:
-        return int(float(value))
+        if float(value).is_integer():
+            return int(float(value))
+        else:
+            raise ValueError(
+                f"Environment variable '{name}' is not an integer or float with zero part, got {value}"
+            )
     except ValueError as exc:
 
         raise ValueError(

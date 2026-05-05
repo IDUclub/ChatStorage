@@ -26,7 +26,7 @@ async def get_logs_path() -> Path:
         Path: Path to logs instance.
     """
 
-    return app_deps["logs_path"]
+    return app_deps["app_config"].PATH_TO_LOG
 
 
 async def get_auth_configuration() -> AuthConfig:
