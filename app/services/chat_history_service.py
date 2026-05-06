@@ -22,6 +22,7 @@ from app.schema.chat_history_schema import (
     ChatListSchema,
     ChatSchema,
     ChatSummarySchema,
+    ChatTitleListSchema,
     DeleteChatSchema,
     MessagePartSchema,
     MessageSchema,
@@ -132,6 +133,18 @@ class ChatHistoryService:
             self._chat_summary_from_document(document) async for document in cursor
         ]
         return ChatListSchema(items=items, limit=limit, offset=offset)
+
+    async def get_unique_chat_titles(self, user_id: str) -> ChatTitleListSchema:
+        """Get all unique non-empty chat titles for a user."""
+
+        titles = await self._chats.distinct(
+            "title",
+            {
+                "user_id": user_id,
+                "title": {"$type": "string", "$ne": ""},
+            },
+        )
+        return ChatTitleListSchema(items=sorted(titles))
 
     async def get_chat(self, user_id: str, chat_id: str) -> ChatSchema:
         """Get user chat with ordered messages."""

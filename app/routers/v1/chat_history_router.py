@@ -10,6 +10,7 @@ from app.schema.chat_history_schema import (
     ChatListSchema,
     ChatSchema,
     ChatSummarySchema,
+    ChatTitleListSchema,
     DeleteChatSchema,
     MessagePartSchema,
     MessageSchema,
@@ -37,6 +38,20 @@ async def get_user_chats(
     """
 
     return await service.get_chats(user_id=user_id, limit=limit, offset=offset)
+
+
+@chat_history_router.get("/chats/titles", response_model=ChatTitleListSchema)
+async def get_user_unique_chat_titles(
+    user_id: str = Depends(get_current_user_id),
+    service: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatTitleListSchema:
+    """
+    Example:
+    GET /api/v1/chat_history/chats/titles
+    Authorization: Bearer <token>
+    """
+
+    return await service.get_unique_chat_titles(user_id=user_id)
 
 
 @chat_history_router.post(

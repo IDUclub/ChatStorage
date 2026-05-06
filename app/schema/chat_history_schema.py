@@ -56,6 +56,12 @@ class ChatListSchema(BaseModel):
     offset: int
 
 
+class ChatTitleListSchema(BaseModel):
+    """Unique chat titles for a user."""
+
+    items: list[str]
+
+
 class DeleteChatSchema(BaseModel):
     """Delete chat result."""
 
