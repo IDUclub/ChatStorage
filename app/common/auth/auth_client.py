@@ -104,7 +104,7 @@ class AuthenticationClient:
                 raise InvalidTokenSignatureError()
 
             key = next(
-                (jwk for jwk in jwks_document.get("kyes", []) if jwk.get("kid") == kid),
+                (jwk for jwk in jwks_document.get("keys", []) if jwk.get("kid") == kid),
                 None,
             )
             if not key:

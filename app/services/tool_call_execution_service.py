@@ -107,6 +107,26 @@ class ToolCallExecutionService:
             result=steps[-1].result if steps else None,
         )
 
+    async def execute_stored_tool_call(
+        self,
+        user_id: str,
+        token: str,
+        message_id: str,
+        part_seq: int,
+        tool_call_step: int,
+        scenario_id: int | None = None,
+    ) -> ToolCallExecutionResultSchema:
+        """Execute a tool call restored from chat history."""
+
+        payload = await self._chain_builder.build_tool_call_extract_payload(
+            user_id=user_id,
+            message_id=message_id,
+            part_seq=part_seq,
+            tool_call_step=tool_call_step,
+            scenario_id=scenario_id,
+        )
+        return await self.execute_tool_call(token, payload)
+
     @staticmethod
     def to_plain_data(value: Any) -> Any:
         """Convert MCP/Pydantic/dataclass responses to JSON-serializable data."""

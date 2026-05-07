@@ -11,7 +11,6 @@ from app.depndencies.dependencies import (
 from app.dto.message_dto import (
     ChatCreateDTO,
     MessageCreateDTO,
-    ToolCallExtractDTO,
 )
 from app.schema.chat_history_schema import (
     ChatListSchema,
@@ -211,73 +210,38 @@ async def get_message_part(
     )
 
 
-@chat_history_router.post(
-    "/tool_call/execute",
+@chat_history_router.get(
+    "/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute",
     response_model=ToolCallExecutionResultSchema,
 )
 async def execute_tool_call(
-    payload: ToolCallExtractDTO = Body(
+    message_id: str = Path(
         ...,
-        openapi_examples={
-            "restriction_chain": {
-                "summary": "Execute tool call with previous calls",
-                "value": {
-                    "scenario_id": 772,
-                    "previous_tool_calls": [
-                        {
-                            "step": 1,
-                            "tool_name": "GetPhysicalObjects",
-                            "arguments": {"physical_objects_names": ["водный объект"]},
-                        },
-                        {
-                            "step": 2,
-                            "tool_name": "GetPhysicalObjects",
-                            "arguments": {"physical_objects_names": ["жилой дом"]},
-                        },
-                        {
-                            "step": 3,
-                            "tool_name": "CreateBuffers",
-                            "arguments": {
-                                "buffer_info": {
-                                    "водный объект": {
-                                        "buffer_size": 200,
-                                        "buffer_type": "round",
-                                        "title": "Зоны возможного подтопления",
-                                    }
-                                }
-                            },
-                        },
-                    ],
-                    "tool_call": {
-                        "step": 4,
-                        "tool_name": "CreateRestrictions",
-                        "arguments": {
-                            "generators": ["Зоны возможного подтопления"],
-                            "objects": ["жилой дом"],
-                            "restrictions": {
-                                "Зоны возможного подтопления": {
-                                    "title": "Запрет размещения жилой застройки",
-                                    "description": "Жилые дома не могут размещаться в пределах 200 м от зон возможного подтопления",
-                                    "to": ["жилой дом"],
-                                }
-                            },
-                        },
-                    },
-                },
-            }
-        },
+        min_length=36,
+        max_length=36,
+        examples=[MESSAGE_ID_EXAMPLE],
     ),
+    part_seq: int = Path(..., ge=1, examples=[7]),
+    tool_call: int = Path(..., ge=1, examples=[1]),
+    scenario_id: int | None = Query(default=None, examples=[772]),
+    user_id: str = Depends(get_current_user_id),
     token: str = Depends(get_current_access_token),
     service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
 ) -> ToolCallExecutionResultSchema:
     """
     Example:
-    POST /api/v1/chat_history/tool_call/execute
+    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?scenario_id=772
     Authorization: Bearer <token>
-    Content-Type: application/json
     """
 
-    return await service.execute_tool_call(token, payload)
+    return await service.execute_stored_tool_call(
+        user_id=user_id,
+        token=token,
+        message_id=message_id,
+        part_seq=part_seq,
+        tool_call_step=tool_call,
+        scenario_id=scenario_id,
+    )
 
 
 @chat_history_router.delete("/{chat_id}", response_model=DeleteChatSchema)

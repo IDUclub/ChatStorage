@@ -213,13 +213,9 @@ class ChatHistoryService:
     ) -> ToolCallExtractSchema:
         """Prepare previous tool calls required to execute the target tool call."""
 
-        previous_tool_calls = sorted(
-            payload.previous_tool_calls,
-            key=lambda tool_call: tool_call.step or 0,
-        )
         previous_steps = [
             self._tool_call_step_from_dto(tool_call)
-            for tool_call in previous_tool_calls
+            for tool_call in payload.previous_tool_calls
         ]
         target_step = self._tool_call_step_from_dto(payload.tool_call)
         all_steps = [*previous_steps, target_step]
@@ -230,7 +226,7 @@ class ChatHistoryService:
             provided_refs = self._provided_refs(step.tool_call)
             provides_by_step[index] = provided_refs
             for provided_ref in provided_refs:
-                providers[self._normalize_ref(provided_ref)] = index
+                providers.setdefault(self._normalize_ref(provided_ref), index)
 
         dependencies_by_step: dict[int, list[int]] = {}
         for index, step in enumerate(all_steps):
@@ -272,6 +268,69 @@ class ChatHistoryService:
             target=target_step.tool_call,
             execution_chain=execution_chain,
             missing_dependencies=sorted(missing_dependencies),
+        )
+
+    async def build_tool_call_extract_payload(
+        self,
+        user_id: str,
+        message_id: str,
+        part_seq: int,
+        tool_call_step: int,
+        scenario_id: int | None = None,
+    ) -> ToolCallExtractDTO:
+        """Build executable tool call payload from a stored message."""
+
+        target_message = await self._messages.find_one(
+            {"user_id": user_id, "message_id": message_id}
+        )
+        if not target_message:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Message not found",
+            )
+
+        previous_tool_calls: list[ToolCallDTO] = []
+        cursor = self._messages.find(
+            {
+                "user_id": user_id,
+                "chat_id": target_message["chat_id"],
+                "seq": {"$lt": target_message["seq"]},
+                "parts.kind": "tool_call",
+            }
+        ).sort("seq", 1)
+        async for message in cursor:
+            previous_tool_calls.extend(self._tool_calls_from_message(message))
+
+        previous_tool_calls.extend(
+            self._tool_calls_from_message(
+                target_message,
+                before_part_seq=part_seq,
+            )
+        )
+
+        target_part = self._tool_call_part_from_message(target_message, part_seq)
+        if target_part is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tool call part {part_seq} not found",
+            )
+
+        target_tool_call: ToolCallDTO | None = None
+        for tool_call in self._tool_calls_from_part(target_part):
+            if tool_call.step == tool_call_step:
+                target_tool_call = tool_call
+                break
+
+        if target_tool_call is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tool call step {tool_call_step} not found in part {part_seq}",
+            )
+
+        return ToolCallExtractDTO(
+            tool_call=target_tool_call,
+            previous_tool_calls=previous_tool_calls,
+            scenario_id=await self._resolve_scenario_id(target_message, scenario_id),
         )
 
     @staticmethod
@@ -332,6 +391,88 @@ class ChatHistoryService:
             metadata=document.get("metadata", {}),
             created_at=document["created_at"],
             updated_at=document["updated_at"],
+        )
+
+    async def _resolve_scenario_id(
+        self,
+        message: dict[str, Any],
+        scenario_id: int | None,
+    ) -> int | None:
+        if scenario_id is not None:
+            return scenario_id
+
+        metadata = message.get("metadata", {})
+        resolved_scenario_id = metadata.get("scenario_id")
+        if resolved_scenario_id is None:
+            chat = await self._chats.find_one(
+                {
+                    "user_id": message["user_id"],
+                    "chat_id": message["chat_id"],
+                },
+                {"scenario_id": 1},
+            )
+            resolved_scenario_id = chat.get("scenario_id") if chat else None
+
+        try:
+            return (
+                int(resolved_scenario_id) if resolved_scenario_id is not None else None
+            )
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _tool_calls_from_message(
+        cls,
+        message: dict[str, Any],
+        before_part_seq: int | None = None,
+    ) -> list[ToolCallDTO]:
+        tool_calls: list[ToolCallDTO] = []
+        for part in message.get("parts", []):
+            if part.get("kind") != "tool_call":
+                continue
+            if before_part_seq is not None and part.get("part_seq") >= before_part_seq:
+                continue
+            tool_calls.extend(cls._tool_calls_from_part(part))
+        return sorted(tool_calls, key=lambda tool_call: tool_call.step or 0)
+
+    @staticmethod
+    def _tool_call_part_from_message(
+        message: dict[str, Any],
+        part_seq: int,
+    ) -> dict[str, Any] | None:
+        for part in message.get("parts", []):
+            if part.get("kind") == "tool_call" and part.get("part_seq") == part_seq:
+                return part
+        return None
+
+    @classmethod
+    def _tool_calls_from_part(cls, part: dict[str, Any]) -> list[ToolCallDTO]:
+        payload = part.get("payload") or {}
+        calls = payload.get("calls") or payload.get("tool_calls") or []
+        return [
+            cls._tool_call_from_payload(call, index)
+            for index, call in enumerate(calls, start=1)
+        ]
+
+    @staticmethod
+    def _tool_call_from_payload(
+        payload: dict[str, Any],
+        fallback_step: int,
+    ) -> ToolCallDTO:
+        function_call = payload.get("function") or {}
+        tool_name = (
+            payload.get("tool_name") or payload.get("name") or function_call.get("name")
+        )
+        arguments = payload.get("arguments") or function_call.get("arguments") or {}
+        if not tool_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Tool call without tool name: {payload}",
+            )
+        return ToolCallDTO(
+            step=payload.get("step") or fallback_step,
+            tool_name=tool_name,
+            arguments=arguments,
         )
 
     @staticmethod
