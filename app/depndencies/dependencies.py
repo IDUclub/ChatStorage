@@ -5,6 +5,7 @@ from app.common.config.app_config import AppConfig
 from app.common.config.auth_config import AuthConfig
 from app.depndencies.init_dependencies import init_dependencies
 from app.services.chat_history_service import ChatHistoryService
+from app.services.tool_call_execution_service import ToolCallExecutionService
 
 app_deps = init_dependencies()
 
@@ -56,6 +57,16 @@ async def get_chat_history_service() -> ChatHistoryService:
     """
 
     return app_deps["chat_history_service"]
+
+
+async def get_tool_call_execution_service() -> ToolCallExecutionService:
+    """
+    Function returns ToolCallExecutionService instance for current app.
+    Returns:
+        ToolCallExecutionService: tool call execution service.
+    """
+
+    return app_deps["tool_call_execution_service"]
 
 
 async def close_mongo_client() -> None:

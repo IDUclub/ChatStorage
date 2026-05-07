@@ -4,6 +4,7 @@ Module aimed to store app configurations.
 
 import os
 from pathlib import Path
+from wsgiref import validate
 
 from app.common.utils.path_utils import resolve_logs_path
 
@@ -23,7 +24,12 @@ class AppConfig:
     """
 
     def __init__(
-        self, mongo_url: str, mongo_user: str, mongo_password: str, mongo_db: str
+        self,
+        mongo_url: str,
+        mongo_user: str,
+        mongo_password: str,
+        mongo_db: str,
+        idu_mcp_url: str,
     ):
         """
         Initialization function for AppConfig class.
@@ -31,7 +37,8 @@ class AppConfig:
             mongo_url (str): Mongo url to access db.
             mongo_user (str): Mongo username to access db.
             mongo_password (str): Mongo user password to access db.
-            mongo_db (str) :Mongo db name to access data.
+            mongo_db (str): Mongo db name to access data.
+            idu_mcp_url (str): Idu mcp url to extract tool calls from.
         """
 
         self.MONGO_URL = self.validate_init_parameter(mongo_url, "MONGO_URL")
@@ -40,6 +47,7 @@ class AppConfig:
             mongo_password, "MONGO_PASSWORD"
         )
         self.MONGO_DB = self.validate_init_parameter(mongo_db, "MONGO_DB")
+        self.IDU_MCP_URL = self.validate_init_parameter(idu_mcp_url, "IDU_MCP_URL")
         self.WORKDIR = Path.cwd()
         self.CHATSTORAGE_LOG_DIR = resolve_logs_path(
             os.getenv("CHATSTORAGE_LOG_DIR"), self.WORKDIR
@@ -90,6 +98,7 @@ class AppConfig:
             "MONGO_USER": self.MONGO_USER,
             "MONGO_PASSWORD": self.MONGO_PASSWORD,
             "MONGO_DB": self.MONGO_DB,
+            "IDU_MCP_URL": self.IDU_MCP_URL,
             "LOGS_DIR": str(self.CHATSTORAGE_LOG_DIR),
             "LOG_FILE": self.CHATSTORAGE_LOG_FILE,
             "PATH_TO_LOG": str(self.PATH_TO_LOG),

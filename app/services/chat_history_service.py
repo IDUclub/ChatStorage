@@ -17,6 +17,8 @@ from app.common.db.chat_history_document import (
 from app.dto.message_dto import (
     ChatCreateDTO,
     MessageCreateDTO,
+    ToolCallDTO,
+    ToolCallExtractDTO,
 )
 from app.schema.chat_history_schema import (
     ChatListSchema,
@@ -26,6 +28,9 @@ from app.schema.chat_history_schema import (
     DeleteChatSchema,
     MessagePartSchema,
     MessageSchema,
+    ToolCallExecutionStepSchema,
+    ToolCallExtractSchema,
+    ToolCallSchema,
 )
 
 
@@ -202,6 +207,73 @@ class ChatHistoryService:
             )
         return MessagePartSchema(**document["parts"][0])
 
+    async def extract_tool_call_chain(
+        self,
+        payload: ToolCallExtractDTO,
+    ) -> ToolCallExtractSchema:
+        """Prepare previous tool calls required to execute the target tool call."""
+
+        previous_tool_calls = sorted(
+            payload.previous_tool_calls,
+            key=lambda tool_call: tool_call.step or 0,
+        )
+        previous_steps = [
+            self._tool_call_step_from_dto(tool_call)
+            for tool_call in previous_tool_calls
+        ]
+        target_step = self._tool_call_step_from_dto(payload.tool_call)
+        all_steps = [*previous_steps, target_step]
+
+        providers: dict[str, int] = {}
+        provides_by_step: dict[int, list[str]] = {}
+        for index, step in enumerate(all_steps):
+            provided_refs = self._provided_refs(step.tool_call)
+            provides_by_step[index] = provided_refs
+            for provided_ref in provided_refs:
+                providers[self._normalize_ref(provided_ref)] = index
+
+        dependencies_by_step: dict[int, list[int]] = {}
+        for index, step in enumerate(all_steps):
+            required_refs = self._required_refs(step.tool_call)
+            dependencies: list[int] = []
+            for required_ref in required_refs:
+                provider_index = providers.get(self._normalize_ref(required_ref))
+                if provider_index is not None and provider_index < index:
+                    self._append_unique_int(dependencies, provider_index)
+            dependencies_by_step[index] = dependencies
+
+        chain_indexes = self._collect_required_step_indexes(
+            len(all_steps) - 1,
+            dependencies_by_step,
+        )
+        missing_dependencies: set[str] = set()
+        for index in chain_indexes:
+            for required_ref in self._required_refs(all_steps[index].tool_call):
+                provider_index = providers.get(self._normalize_ref(required_ref))
+                if provider_index is None or provider_index >= index:
+                    missing_dependencies.add(required_ref)
+
+        execution_chain = [
+            ToolCallExecutionStepSchema(
+                order=order,
+                tool_call=all_steps[index].tool_call,
+                depends_on=[
+                    chain_indexes.index(dependency) + 1
+                    for dependency in dependencies_by_step[index]
+                    if dependency in chain_indexes
+                ],
+                requires=self._required_refs(all_steps[index].tool_call),
+                provides=provides_by_step[index],
+            )
+            for order, index in enumerate(chain_indexes, start=1)
+        ]
+
+        return ToolCallExtractSchema(
+            target=target_step.tool_call,
+            execution_chain=execution_chain,
+            missing_dependencies=sorted(missing_dependencies),
+        )
+
     @staticmethod
     def _now() -> datetime:
         return datetime.now(UTC)
@@ -261,3 +333,123 @@ class ChatHistoryService:
             created_at=document["created_at"],
             updated_at=document["updated_at"],
         )
+
+    @staticmethod
+    def _tool_call_step_from_dto(tool_call: ToolCallDTO) -> ToolCallExecutionStepSchema:
+        return ToolCallExecutionStepSchema(
+            order=tool_call.step or 0,
+            tool_call=ToolCallSchema(
+                step=tool_call.step,
+                tool_name=tool_call.tool_name,
+                arguments=tool_call.arguments,
+            ),
+        )
+
+    @classmethod
+    def _provided_refs(cls, tool_call: ToolCallSchema) -> list[str]:
+        arguments = tool_call.arguments
+        if tool_call.tool_name == "GetServices":
+            return cls._string_list(arguments.get("services_names"))
+
+        if tool_call.tool_name == "GetPhysicalObjects":
+            return cls._string_list(arguments.get("physical_objects_names"))
+
+        if tool_call.tool_name == "CreateBuffers":
+            buffer_info = arguments.get("buffer_info")
+            if not isinstance(buffer_info, dict):
+                return []
+            refs: list[str] = []
+            for source_name, info in buffer_info.items():
+                cls._append_unique_str(refs, str(source_name))
+                if isinstance(info, dict) and info.get("title"):
+                    cls._append_unique_str(refs, str(info["title"]))
+            return refs
+
+        return cls._collect_string_refs(arguments)
+
+    @classmethod
+    def _required_refs(cls, tool_call: ToolCallSchema) -> list[str]:
+        arguments = tool_call.arguments
+        if tool_call.tool_name == "CreateBuffers":
+            buffer_info = arguments.get("buffer_info")
+            if isinstance(buffer_info, dict):
+                return [str(name) for name in buffer_info]
+            return []
+
+        if tool_call.tool_name == "CreateRestrictions":
+            refs: list[str] = []
+            for ref in cls._string_list(arguments.get("generators")):
+                cls._append_unique_str(refs, ref)
+            for ref in cls._string_list(arguments.get("objects")):
+                cls._append_unique_str(refs, ref)
+
+            restrictions = arguments.get("restrictions")
+            if isinstance(restrictions, dict):
+                for generator_name, restriction in restrictions.items():
+                    cls._append_unique_str(refs, str(generator_name))
+                    if isinstance(restriction, dict):
+                        for ref in cls._string_list(restriction.get("to")):
+                            cls._append_unique_str(refs, ref)
+            return refs
+
+        explicit_dependencies = arguments.get("depends_on") or arguments.get("requires")
+        return cls._string_list(explicit_dependencies)
+
+    @classmethod
+    def _collect_required_step_indexes(
+        cls,
+        target_index: int,
+        dependencies_by_step: dict[int, list[int]],
+    ) -> list[int]:
+        result: list[int] = []
+        visited: set[int] = set()
+
+        def visit(index: int) -> None:
+            if index in visited:
+                return
+            visited.add(index)
+            for dependency_index in dependencies_by_step.get(index, []):
+                visit(dependency_index)
+            result.append(index)
+
+        visit(target_index)
+        return result
+
+    @classmethod
+    def _collect_string_refs(cls, value: Any) -> list[str]:
+        refs: list[str] = []
+        if isinstance(value, str):
+            cls._append_unique_str(refs, value)
+            return refs
+        if isinstance(value, dict):
+            for item_key, item_value in value.items():
+                cls._append_unique_str(refs, str(item_key))
+                for ref in cls._collect_string_refs(item_value):
+                    cls._append_unique_str(refs, ref)
+        if isinstance(value, list):
+            for item in value:
+                for ref in cls._collect_string_refs(item):
+                    cls._append_unique_str(refs, ref)
+        return refs
+
+    @staticmethod
+    def _string_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item) for item in value if item is not None]
+        return [str(value)]
+
+    @staticmethod
+    def _normalize_ref(value: str) -> str:
+        return value.strip().casefold()
+
+    @staticmethod
+    def _append_unique_str(items: list[str], item: str) -> None:
+        if item not in items:
+            items.append(item)
+
+    @staticmethod
+    def _append_unique_int(items: list[int], item: int) -> None:
+        if item not in items:
+            items.append(item)

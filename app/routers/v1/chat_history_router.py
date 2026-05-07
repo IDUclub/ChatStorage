@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Body, Depends, Path, Query, status
 
-from app.depndencies.auth_dependencies import get_current_user_id
-from app.depndencies.dependencies import get_chat_history_service
+from app.depndencies.auth_dependencies import (
+    get_current_access_token,
+    get_current_user_id,
+)
+from app.depndencies.dependencies import (
+    get_chat_history_service,
+    get_tool_call_execution_service,
+)
 from app.dto.message_dto import (
     ChatCreateDTO,
     MessageCreateDTO,
+    ToolCallExtractDTO,
 )
 from app.schema.chat_history_schema import (
     ChatListSchema,
@@ -14,8 +21,10 @@ from app.schema.chat_history_schema import (
     DeleteChatSchema,
     MessagePartSchema,
     MessageSchema,
+    ToolCallExecutionResultSchema,
 )
 from app.services.chat_history_service import ChatHistoryService
+from app.services.tool_call_execution_service import ToolCallExecutionService
 
 chat_history_router = APIRouter(prefix="/api/v1/chat_history", tags=["chat_history"])
 
@@ -200,6 +209,75 @@ async def get_message_part(
         message_id=message_id,
         part_seq=part_seq,
     )
+
+
+@chat_history_router.post(
+    "/tool_call/execute",
+    response_model=ToolCallExecutionResultSchema,
+)
+async def execute_tool_call(
+    payload: ToolCallExtractDTO = Body(
+        ...,
+        openapi_examples={
+            "restriction_chain": {
+                "summary": "Execute tool call with previous calls",
+                "value": {
+                    "scenario_id": 772,
+                    "previous_tool_calls": [
+                        {
+                            "step": 1,
+                            "tool_name": "GetPhysicalObjects",
+                            "arguments": {"physical_objects_names": ["водный объект"]},
+                        },
+                        {
+                            "step": 2,
+                            "tool_name": "GetPhysicalObjects",
+                            "arguments": {"physical_objects_names": ["жилой дом"]},
+                        },
+                        {
+                            "step": 3,
+                            "tool_name": "CreateBuffers",
+                            "arguments": {
+                                "buffer_info": {
+                                    "водный объект": {
+                                        "buffer_size": 200,
+                                        "buffer_type": "round",
+                                        "title": "Зоны возможного подтопления",
+                                    }
+                                }
+                            },
+                        },
+                    ],
+                    "tool_call": {
+                        "step": 4,
+                        "tool_name": "CreateRestrictions",
+                        "arguments": {
+                            "generators": ["Зоны возможного подтопления"],
+                            "objects": ["жилой дом"],
+                            "restrictions": {
+                                "Зоны возможного подтопления": {
+                                    "title": "Запрет размещения жилой застройки",
+                                    "description": "Жилые дома не могут размещаться в пределах 200 м от зон возможного подтопления",
+                                    "to": ["жилой дом"],
+                                }
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    ),
+    token: str = Depends(get_current_access_token),
+    service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
+) -> ToolCallExecutionResultSchema:
+    """
+    Example:
+    POST /api/v1/chat_history/tool_call/execute
+    Authorization: Bearer <token>
+    Content-Type: application/json
+    """
+
+    return await service.execute_tool_call(token, payload)
 
 
 @chat_history_router.delete("/{chat_id}", response_model=DeleteChatSchema)
