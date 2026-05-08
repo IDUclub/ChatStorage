@@ -7,8 +7,12 @@ services:
     env_file:
       - .env.example
     ports:
-      - "8000:8000"
+      - "8010:8000"
     restart: unless-stopped
+    networks:
+      localnet:
+        aliases:
+          - chat_storage
 
   mongo:
     image: mongo:8.0.21-rc1-noble
@@ -23,3 +27,9 @@ services:
     volumes:
       - ./mongo/data:/data/db
       - ./mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - localnet
+
+networks:
+  localnet:
+    external: true
