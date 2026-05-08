@@ -219,3 +219,9 @@ __marimo__/
 .env.development
 .env.production
 .env.docker
+
+# Mongo data
+data/
+
+# logs
+/logs

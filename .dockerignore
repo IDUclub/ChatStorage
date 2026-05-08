@@ -1,5 +1,9 @@
 .env.development
-.pre-commit-config.yaml
-.env.development
 .env.production
+.venv
+/logs
+*.log
+.vscode
+.pre-commit-config.yaml
 Makefile
+README.md
