@@ -154,6 +154,7 @@ def load_config() -> AppConfig:
             mongo_user=os.getenv("MONGO_USER"),
             mongo_password=os.getenv("MONGO_PASSWORD"),
             mongo_db=os.getenv("MONGO_DB"),
+            idu_mcp_url=os.getenv("IDU_MCP_URL"),
         )
     except ValueError:
         logger.warning(
@@ -172,6 +173,7 @@ def load_config() -> AppConfig:
                     mongo_user=os.environ.get("MONGO_USER"),
                     mongo_password=os.environ.get("MONGO_PASSWORD"),
                     mongo_db=os.environ.get("MONGO_DB"),
+                    idu_mcp_url=os.getenv("IDU_MCP_URL"),
                 )
             else:
                 logger.warning(
@@ -188,6 +190,7 @@ def load_config() -> AppConfig:
                         mongo_user=os.environ.get("MONGO_USER"),
                         mongo_password=os.environ.get("MONGO_PASSWORD"),
                         mongo_db=os.environ.get("MONGO_DB"),
+                        idu_mcp_url=os.getenv("IDU_MCP_URL"),
                     )
             logger.warning(
                 "No config file found or no new variables where found from: {}".format(
@@ -199,6 +202,7 @@ def load_config() -> AppConfig:
                 mongo_user=os.getenv("MONGO_USER"),
                 mongo_password=os.getenv("MONGO_PASSWORD"),
                 mongo_db=os.getenv("MONGO_DB"),
+                idu_mcp_url=os.getenv("IDU_MCP_URL"),
             )
         except ValueError:
             raise

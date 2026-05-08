@@ -37,3 +37,20 @@ class ChatCreateDTO(BaseModel):
     title: str | None = Field(default=None, max_length=256)
     scenario_id: str | int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallDTO(BaseModel):
+    """Tool call received from clients or restored from history."""
+
+    step: int | None = Field(default=None, ge=1)
+    tool_name: str = Field(min_length=1)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallExtractDTO(BaseModel):
+    """Payload for preparing an executable tool call chain."""
+
+    tool_call: ToolCallDTO
+    previous_tool_calls: list[ToolCallDTO] = Field(default_factory=list)
+    scenario_id: int | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)

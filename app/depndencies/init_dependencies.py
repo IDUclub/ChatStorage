@@ -5,6 +5,7 @@ from app.common.config.config_loader import load_auth_config, load_config
 from app.common.db.mongo import create_mongo_client, get_database
 from app.common.logging.init_logs import init_logger
 from app.services.chat_history_service import ChatHistoryService
+from app.services.tool_call_execution_service import ToolCallExecutionService
 
 
 def init_dependencies() -> dict:
@@ -16,6 +17,10 @@ def init_dependencies() -> dict:
     mongo_client = create_mongo_client(app_config)
     mongo_db = get_database(mongo_client, app_config)
     chat_history_service = ChatHistoryService(mongo_db)
+    tool_call_execution_service = ToolCallExecutionService(
+        app_config.IDU_MCP_URL,
+        chat_history_service,
+    )
     return {
         "app_config": app_config,
         "auth_config": auth_config,
@@ -23,4 +28,5 @@ def init_dependencies() -> dict:
         "mongo_client": mongo_client,
         "mongo_db": mongo_db,
         "chat_history_service": chat_history_service,
+        "tool_call_execution_service": tool_call_execution_service,
     }

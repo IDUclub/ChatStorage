@@ -56,8 +56,56 @@ class ChatListSchema(BaseModel):
     offset: int
 
 
+class ChatTitleListSchema(BaseModel):
+    """Unique chat titles for a user."""
+
+    items: list[str]
+
+
 class DeleteChatSchema(BaseModel):
     """Delete chat result."""
 
     chat_id: str
     deleted_messages: int
+
+
+class ToolCallSchema(BaseModel):
+    """Tool call returned to clients."""
+
+    step: int | None = None
+    tool_name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallExecutionStepSchema(BaseModel):
+    """Executable tool call with dependency metadata."""
+
+    order: int
+    tool_call: ToolCallSchema
+    depends_on: list[int] = Field(default_factory=list)
+    requires: list[str] = Field(default_factory=list)
+    provides: list[str] = Field(default_factory=list)
+
+
+class ToolCallExtractSchema(BaseModel):
+    """Prepared tool call execution chain."""
+
+    target: ToolCallSchema
+    execution_chain: list[ToolCallExecutionStepSchema]
+    missing_dependencies: list[str] = Field(default_factory=list)
+
+
+class ToolCallResultStepSchema(BaseModel):
+    """Result of one executed tool call."""
+
+    order: int
+    tool_call: ToolCallSchema
+    meta: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any]
+
+
+class ToolCallExecutionResultSchema(ToolCallExtractSchema):
+    """Executed tool call chain with final result."""
+
+    steps: list[ToolCallResultStepSchema] = Field(default_factory=list)
+    result: dict[str, Any] | None = None

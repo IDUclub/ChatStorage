@@ -8,6 +8,7 @@ dependencies = [
     "cachetools>=7.1.1",
     "dotenv>=0.9.9",
     "fastapi>=0.136.1",
+    "fastmcp>=3.2.4",
     "loguru>=0.7.3",
     "pymongo>=4.17.0",
     "python-jose[cryptography]>=3.5.0",

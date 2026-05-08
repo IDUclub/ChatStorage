@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Body, Depends, Path, Query, status
 
-from app.depndencies.auth_dependencies import get_current_user_id
-from app.depndencies.dependencies import get_chat_history_service
+from app.depndencies.auth_dependencies import (
+    get_current_access_token,
+    get_current_user_id,
+)
+from app.depndencies.dependencies import (
+    get_chat_history_service,
+    get_tool_call_execution_service,
+)
 from app.dto.message_dto import (
     ChatCreateDTO,
     MessageCreateDTO,
@@ -10,11 +16,14 @@ from app.schema.chat_history_schema import (
     ChatListSchema,
     ChatSchema,
     ChatSummarySchema,
+    ChatTitleListSchema,
     DeleteChatSchema,
     MessagePartSchema,
     MessageSchema,
+    ToolCallExecutionResultSchema,
 )
 from app.services.chat_history_service import ChatHistoryService
+from app.services.tool_call_execution_service import ToolCallExecutionService
 
 chat_history_router = APIRouter(prefix="/api/v1/chat_history", tags=["chat_history"])
 
@@ -37,6 +46,20 @@ async def get_user_chats(
     """
 
     return await service.get_chats(user_id=user_id, limit=limit, offset=offset)
+
+
+@chat_history_router.get("/chats/titles", response_model=ChatTitleListSchema)
+async def get_user_unique_chat_titles(
+    user_id: str = Depends(get_current_user_id),
+    service: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatTitleListSchema:
+    """
+    Example:
+    GET /api/v1/chat_history/chats/titles
+    Authorization: Bearer <token>
+    """
+
+    return await service.get_unique_chat_titles(user_id=user_id)
 
 
 @chat_history_router.post(
@@ -184,6 +207,40 @@ async def get_message_part(
         chat_id=chat_id,
         message_id=message_id,
         part_seq=part_seq,
+    )
+
+
+@chat_history_router.get(
+    "/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute",
+    response_model=ToolCallExecutionResultSchema,
+)
+async def execute_tool_call(
+    message_id: str = Path(
+        ...,
+        min_length=36,
+        max_length=36,
+        examples=[MESSAGE_ID_EXAMPLE],
+    ),
+    part_seq: int = Path(..., ge=1, examples=[7]),
+    tool_call: int = Path(..., ge=1, examples=[1]),
+    scenario_id: int | None = Query(default=None, examples=[772]),
+    user_id: str = Depends(get_current_user_id),
+    token: str = Depends(get_current_access_token),
+    service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
+) -> ToolCallExecutionResultSchema:
+    """
+    Example:
+    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?scenario_id=772
+    Authorization: Bearer <token>
+    """
+
+    return await service.execute_stored_tool_call(
+        user_id=user_id,
+        token=token,
+        message_id=message_id,
+        part_seq=part_seq,
+        tool_call_step=tool_call,
+        scenario_id=scenario_id,
     )
 
 
