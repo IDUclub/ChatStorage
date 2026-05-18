@@ -21,6 +21,7 @@ class AppConfig:
         CHATSTORAGE_LOG_DIR (Path): Path to log file.
         CHATSTORAGE_LOG_FILE (str): Log file name.
         PATH_TO_LOG (Path): Full path to logs file.
+        MCP_SOURCES (dict[str, str]): Mapping from MCP server name to URL.
     """
 
     def __init__(
@@ -30,6 +31,7 @@ class AppConfig:
         mongo_password: str,
         mongo_db: str,
         idu_mcp_url: str,
+        mcp_sources: dict[str, str] | None = None,
     ):
         """
         Initialization function for AppConfig class.
@@ -48,6 +50,7 @@ class AppConfig:
         )
         self.MONGO_DB = self.validate_init_parameter(mongo_db, "MONGO_DB")
         self.IDU_MCP_URL = self.validate_init_parameter(idu_mcp_url, "IDU_MCP_URL")
+        self.MCP_SOURCES: dict[str, str] = mcp_sources or {}
         self.WORKDIR = Path.cwd()
         self.CHATSTORAGE_LOG_DIR = resolve_logs_path(
             os.getenv("CHATSTORAGE_LOG_DIR"), self.WORKDIR
@@ -99,6 +102,7 @@ class AppConfig:
             "MONGO_PASSWORD": self.MONGO_PASSWORD,
             "MONGO_DB": self.MONGO_DB,
             "IDU_MCP_URL": self.IDU_MCP_URL,
+            "MCP_SOURCES": str(self.MCP_SOURCES),
             "LOGS_DIR": str(self.CHATSTORAGE_LOG_DIR),
             "LOG_FILE": self.CHATSTORAGE_LOG_FILE,
             "PATH_TO_LOG": str(self.PATH_TO_LOG),

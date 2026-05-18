@@ -15,6 +15,7 @@ class MessagePartSchema(BaseModel):
     part_seq: int
     kind: MessagePartKind
     payload: dict[str, Any]
+    mcp_source: str | None = None
     created_at: datetime
 
 
