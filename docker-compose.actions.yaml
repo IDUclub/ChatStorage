@@ -1,0 +1,32 @@
+services:
+  chat_storage:
+    image: ${IMAGE}
+    container_name: ${CONTAINER_NAME}
+    env_file:
+      - .env
+    ports:
+      - "8010:8000"
+    restart: unless-stopped
+    networks:
+      localnet:
+        aliases:
+          - chat_storage
+
+  mongo:
+    image: mongo:8.0.21-rc1-noble
+    container_name: mongo_db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: chat_history
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongo/data:/data/db
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - localnet
+
+networks:
+  localnet:
