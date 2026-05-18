@@ -20,6 +20,7 @@ def init_dependencies() -> dict:
     tool_call_execution_service = ToolCallExecutionService(
         app_config.IDU_MCP_URL,
         chat_history_service,
+        mcp_sources=app_config.MCP_SOURCES,
     )
     return {
         "app_config": app_config,

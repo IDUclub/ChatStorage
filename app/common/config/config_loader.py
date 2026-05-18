@@ -138,6 +138,19 @@ def try_load(env_file_extension: str) -> dict[str, tuple[str | None, str | None]
     }
 
 
+def _get_mcp_sources() -> dict[str, str]:
+    """Build MCP server name→URL mapping from env vars ending with '_MCP_URL'.
+
+    ``<NAME>_MCP_URL`` is registered under the lowercased ``<name>`` key,
+    e.g. ``IDU_MCP_URL`` → ``{"idu": "<value>"}``.
+    """
+    return {
+        key[: -len("_MCP_URL")].lower(): value
+        for key, value in os.environ.items()
+        if key.endswith("_MCP_URL") and value and key != "_MCP_URL"
+    }
+
+
 def load_config() -> AppConfig:
     """
     Function loads app configuration from env. Firstly tries to load configurations from file.
@@ -155,6 +168,7 @@ def load_config() -> AppConfig:
             mongo_password=os.getenv("MONGO_PASSWORD"),
             mongo_db=os.getenv("MONGO_DB"),
             idu_mcp_url=os.getenv("IDU_MCP_URL"),
+            mcp_sources=_get_mcp_sources(),
         )
     except ValueError:
         logger.warning(
@@ -174,6 +188,7 @@ def load_config() -> AppConfig:
                     mongo_password=os.environ.get("MONGO_PASSWORD"),
                     mongo_db=os.environ.get("MONGO_DB"),
                     idu_mcp_url=os.getenv("IDU_MCP_URL"),
+                    mcp_sources=_get_mcp_sources(),
                 )
             else:
                 logger.warning(
@@ -191,6 +206,7 @@ def load_config() -> AppConfig:
                         mongo_password=os.environ.get("MONGO_PASSWORD"),
                         mongo_db=os.environ.get("MONGO_DB"),
                         idu_mcp_url=os.getenv("IDU_MCP_URL"),
+                        mcp_sources=_get_mcp_sources(),
                     )
             logger.warning(
                 "No config file found or no new variables where found from: {}".format(
@@ -203,6 +219,7 @@ def load_config() -> AppConfig:
                 mongo_password=os.getenv("MONGO_PASSWORD"),
                 mongo_db=os.getenv("MONGO_DB"),
                 idu_mcp_url=os.getenv("IDU_MCP_URL"),
+                mcp_sources=_get_mcp_sources(),
             )
         except ValueError:
             raise

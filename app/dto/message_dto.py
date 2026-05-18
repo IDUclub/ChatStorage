@@ -12,6 +12,7 @@ class MessagePartCreateDTO(BaseModel):
 
     kind: MessagePartKind = "text"
     payload: dict[str, Any]
+    mcp_source: str | None = None
 
 
 class MessageCreateDTO(BaseModel):
@@ -53,4 +54,5 @@ class ToolCallExtractDTO(BaseModel):
     tool_call: ToolCallDTO
     previous_tool_calls: list[ToolCallDTO] = Field(default_factory=list)
     scenario_id: int | None = None
+    mcp_source: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
