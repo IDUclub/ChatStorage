@@ -20,7 +20,8 @@ class ToolCallExecutionService:
     """
     Class fpr execution direct tool calls and their required previous calls.
     Attributes:
-        _idu_mcp_url (str): IDU MCP server url.
+        _idu_mcp_url (str): IDU MCP server url (default fallback).
+        _mcp_sources (dict[str, str]): Mapping from MCP server name to URL.
         _chain_builder (ChatHistoryService): ChatStorageService instance with functions for building tool chains.
     """
 
@@ -28,15 +29,18 @@ class ToolCallExecutionService:
         self,
         idu_mcp_url: str,
         chain_builder: ChatHistoryService,
+        mcp_sources: dict[str, str] | None = None,
     ) -> None:
         """
         Initialization function for ToolCallExecutor class.
         Args:
-            idu_mcp_url (str): IDU MCP server url.
+            idu_mcp_url (str): IDU MCP server url (default fallback).
             chain_builder (ChatHistoryService): ChatStorageService instance with functions for building tool chains.
+            mcp_sources (dict[str, str] | None): Mapping from MCP server name to URL.
         """
 
         self._idu_mcp_url = idu_mcp_url
+        self._mcp_sources = mcp_sources or {}
         self._chain_builder = chain_builder
 
     async def execute_tool_call(
@@ -53,7 +57,8 @@ class ToolCallExecutionService:
             ToolCallExecutionResultSchema: Executed tool results.
         """
 
-        if not self._idu_mcp_url:
+        mcp_url = self._resolve_mcp_url(payload.mcp_source)
+        if not mcp_url:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="IDU_MCP_URL is not configured",
@@ -74,7 +79,7 @@ class ToolCallExecutionService:
         accumulated_layers: dict[str, dict[str, Any]] = {}
         steps: list[ToolCallResultStepSchema] = []
 
-        async with Client(self._idu_mcp_url, auth=token) as mcp:
+        async with Client(mcp_url, auth=token) as mcp:
             for execution_step in chain.execution_chain:
                 tool_call = execution_step.tool_call
                 meta = self._meta_for_tool_call(
@@ -179,3 +184,9 @@ class ToolCallExecutionService:
         for key, value in result.items():
             if isinstance(value, dict):
                 accumulated_layers[key] = value
+
+    def _resolve_mcp_url(self, mcp_source: str | None) -> str:
+        """Return the MCP server URL for the given source name, falling back to IDU_MCP_URL."""
+        if mcp_source and mcp_source in self._mcp_sources:
+            return self._mcp_sources[mcp_source]
+        return self._idu_mcp_url

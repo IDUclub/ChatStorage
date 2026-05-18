@@ -120,6 +120,10 @@ db.createCollection("messages", {
               payload: {
                 bsonType: "object"
               },
+              mcp_source: {
+                bsonType: ["string", "null"],
+                description: "Optional MCP server name that executed this tool"
+              },
               created_at: {
                 bsonType: "date"
               }

@@ -331,6 +331,7 @@ class ChatHistoryService:
             tool_call=target_tool_call,
             previous_tool_calls=previous_tool_calls,
             scenario_id=await self._resolve_scenario_id(target_message, scenario_id),
+            mcp_source=target_part.get("mcp_source"),
         )
 
     @staticmethod
@@ -350,15 +351,18 @@ class ChatHistoryService:
         created_at: datetime,
     ) -> list[MessagePartDocument]:
         if message.parts:
-            return [
-                {
+            parts: list[MessagePartDocument] = []
+            for index, part in enumerate(message.parts, start=1):
+                doc: MessagePartDocument = {
                     "part_seq": index,
                     "kind": part.kind,
                     "payload": part.payload,
                     "created_at": created_at,
                 }
-                for index, part in enumerate(message.parts, start=1)
-            ]
+                if part.mcp_source is not None:
+                    doc["mcp_source"] = part.mcp_source
+                parts.append(doc)
+            return parts
 
         return [
             {

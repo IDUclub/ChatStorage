@@ -12,6 +12,7 @@ class MessagePartDocument(TypedDict):
     part_seq: int
     kind: MessagePartKind
     payload: dict[str, Any]
+    mcp_source: NotRequired[str | None]
     created_at: datetime
 
 
