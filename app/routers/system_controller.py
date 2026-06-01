@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.depndencies.dependencies import get_logs_path
+from app.depndencies.dependencies import (
+    MONGO_ENV_VARS,
+    get_logs_path,
+    reinitialize_db_service,
+)
 
 system_router = APIRouter(prefix="/system", tags=["system"])
 
@@ -41,9 +45,12 @@ async def update_env_vars(variables: dict[str, str]):
     """
     Updates multiple environment variables at once.
     Body: {"KEY": "value", ...}
+    Reinitializes the DB service if any MONGO_* variable is changed.
     """
     for key, value in variables.items():
         os.environ[key] = value
+    if MONGO_ENV_VARS & variables.keys():
+        await reinitialize_db_service()
     return {"updated": list(variables.keys())}
 
 
@@ -65,6 +72,9 @@ async def update_env_var(key: str, body: EnvVarValue):
     """
     Sets or updates the value of a specific environment variable.
     Body: {"value": "new_value"}
+    Reinitializes the DB service if a MONGO_* variable is changed.
     """
     os.environ[key] = body.value
+    if key in MONGO_ENV_VARS:
+        await reinitialize_db_service()
     return {"key": key, "value": body.value}
