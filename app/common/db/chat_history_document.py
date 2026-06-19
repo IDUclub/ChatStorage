@@ -26,6 +26,7 @@ class ChatDocument(TypedDict):
     updated_at: datetime
     title: NotRequired[str | None]
     scenario_id: NotRequired[str | int | None]
+    project_id: NotRequired[str | int | None]
     metadata: NotRequired[dict[str, Any]]
 
 

@@ -120,6 +120,7 @@ class ToolCallExecutionService:
         part_seq: int,
         tool_call_step: int,
         scenario_id: int | None = None,
+        project_id: int | None = None,
     ) -> ToolCallExecutionResultSchema:
         """Execute a tool call restored from chat history."""
 
@@ -129,6 +130,7 @@ class ToolCallExecutionService:
             part_seq=part_seq,
             tool_call_step=tool_call_step,
             scenario_id=scenario_id,
+            project_id=project_id,
         )
         return await self.execute_tool_call(token, payload)
 
@@ -154,6 +156,8 @@ class ToolCallExecutionService:
         meta = dict(payload.meta)
         if payload.scenario_id is not None:
             meta["scenario_id"] = payload.scenario_id
+        if payload.project_id is not None:
+            meta["project_id"] = payload.project_id
         return meta
 
     @staticmethod

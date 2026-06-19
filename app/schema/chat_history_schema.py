@@ -38,6 +38,7 @@ class ChatSummarySchema(BaseModel):
     chat_id: str
     title: str | None = None
     scenario_id: str | int | None = None
+    project_id: str | int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime

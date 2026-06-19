@@ -13,6 +13,7 @@ from app.depndencies.dependencies import (
     close_mongo_client,
     get_app_configuration,
     get_auth_configuration,
+    run_startup_migrations,
 )
 from app.routers.system_controller import system_router
 from app.routers.v1.chat_history_router import chat_history_router
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     )
     auth_config = await get_auth_configuration()
     logger.info(f"Loaded app configuration with values: {auth_config.__dict__}")
+    await run_startup_migrations()
     yield
     await close_mongo_client()
     logger.info("App is shutting down")
