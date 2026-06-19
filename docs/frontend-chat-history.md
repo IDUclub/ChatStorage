@@ -22,6 +22,7 @@ type ChatSummary = {
   chat_id: string;
   title: string | null;
   scenario_id: string | number | null;
+  project_id: string | number | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -78,6 +79,10 @@ Query:
 
 - `limit` - от `1` до `100`, по умолчанию `50`.
 - `offset` - от `0`, по умолчанию `0`.
+- `scenario_id` - необязательный фильтр по сценарию. Совпадает и со строковым, и с числовым значением (`772` найдёт чаты, где сохранено как `"772"` или `772`).
+- `project_id` - необязательный фильтр по проекту, по той же логике совпадения.
+
+Фильтры можно комбинировать. Чаты всегда отсортированы по `updated_at` от новых к старым, независимо от фильтров.
 
 Ответ:
 
@@ -98,6 +103,7 @@ type ChatListResponse = {
       "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "title": "New assistant chat",
       "scenario_id": "default",
+      "project_id": 42,
       "metadata": { "source": "web" },
       "created_at": "2026-05-08T14:00:00Z",
       "updated_at": "2026-05-08T14:10:00Z"
@@ -135,15 +141,18 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-Body необязателен. Если данных нет, чат будет создан с пустыми `title`, `scenario_id` и `metadata`.
+Body необязателен. Если данных нет, чат будет создан с пустыми `title`, `scenario_id`, `project_id` и `metadata`.
 
 ```ts
 type CreateChatRequest = {
   title?: string | null;
   scenario_id?: string | number | null;
+  project_id?: string | number | null;
   metadata?: Record<string, unknown>;
 };
 ```
+
+`project_id` опционален, но фронту следует передавать его всегда, когда задан `scenario_id`.
 
 Пример:
 
@@ -151,6 +160,7 @@ type CreateChatRequest = {
 {
   "title": "New assistant chat",
   "scenario_id": "default",
+  "project_id": 42,
   "metadata": {
     "source": "web"
   }
@@ -177,6 +187,7 @@ Authorization: Bearer <token>
   "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "title": "New assistant chat",
   "scenario_id": "default",
+  "project_id": 42,
   "metadata": {},
   "created_at": "2026-05-08T14:00:00Z",
   "updated_at": "2026-05-08T14:10:00Z",
@@ -216,7 +227,7 @@ Authorization: Bearer <token>
 ### Выполнить сохраненный tool call
 
 ```http
-GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?scenario_id=772
+GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?scenario_id=772&project_id=42
 Authorization: Bearer <token>
 ```
 
@@ -229,6 +240,7 @@ Path:
 Query:
 
 - `scenario_id` - необязательный. Если не передать, backend попробует взять его из `message.metadata.scenario_id`, затем из `chat.scenario_id`.
+- `project_id` - необязательный. Если не передать, backend попробует взять его из `message.metadata.project_id`, затем из `chat.project_id`.
 
 Ожидаемый формат `tool_call` part:
 
@@ -402,9 +414,23 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
-export function getChats(token: string, limit = 50, offset = 0) {
+export function getChats(
+  token: string,
+  limit = 50,
+  offset = 0,
+  filters: { scenario_id?: string | number; project_id?: string | number } = {},
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (filters.scenario_id != null)
+    params.set("scenario_id", String(filters.scenario_id));
+  if (filters.project_id != null)
+    params.set("project_id", String(filters.project_id));
+
   return request<ChatListResponse>(
-    `/api/v1/chat_history/chats?limit=${limit}&offset=${offset}`,
+    `/api/v1/chat_history/chats?${params.toString()}`,
     token,
   );
 }
