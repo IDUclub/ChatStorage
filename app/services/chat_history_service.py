@@ -63,6 +63,7 @@ class ChatHistoryService:
             "chat_id": str(uuid4()),
             "title": payload.title,
             "scenario_id": payload.scenario_id,
+            "project_id": payload.project_id,
             "metadata": payload.metadata,
             "next_seq": 1,
             "created_at": now,
@@ -125,14 +126,19 @@ class ChatHistoryService:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
+        scenario_id: str | None = None,
+        project_id: str | None = None,
     ) -> ChatListSchema:
-        """Get user chats ordered by recent activity."""
+        """Get user chats ordered by recent activity, newest first."""
+
+        query: dict[str, Any] = {"user_id": user_id}
+        if scenario_id is not None:
+            query["scenario_id"] = {"$in": self._filter_candidates(scenario_id)}
+        if project_id is not None:
+            query["project_id"] = {"$in": self._filter_candidates(project_id)}
 
         cursor = (
-            self._chats.find({"user_id": user_id})
-            .sort("updated_at", -1)
-            .skip(offset)
-            .limit(limit)
+            self._chats.find(query).sort("updated_at", -1).skip(offset).limit(limit)
         )
         items = [
             self._chat_summary_from_document(document) async for document in cursor
@@ -277,6 +283,7 @@ class ChatHistoryService:
         part_seq: int,
         tool_call_step: int,
         scenario_id: int | None = None,
+        project_id: int | None = None,
     ) -> ToolCallExtractDTO:
         """Build executable tool call payload from a stored message."""
 
@@ -330,7 +337,12 @@ class ChatHistoryService:
         return ToolCallExtractDTO(
             tool_call=target_tool_call,
             previous_tool_calls=previous_tool_calls,
-            scenario_id=await self._resolve_scenario_id(target_message, scenario_id),
+            scenario_id=await self._resolve_int_field(
+                target_message, scenario_id, "scenario_id"
+            ),
+            project_id=await self._resolve_int_field(
+                target_message, project_id, "project_id"
+            ),
             mcp_source=target_part.get("mcp_source"),
         )
 
@@ -379,6 +391,7 @@ class ChatHistoryService:
             chat_id=document["chat_id"],
             title=document.get("title"),
             scenario_id=document.get("scenario_id"),
+            project_id=document.get("project_id"),
             metadata=document.get("metadata", {}),
             created_at=document["created_at"],
             updated_at=document["updated_at"],
@@ -397,30 +410,31 @@ class ChatHistoryService:
             updated_at=document["updated_at"],
         )
 
-    async def _resolve_scenario_id(
+    async def _resolve_int_field(
         self,
         message: dict[str, Any],
-        scenario_id: int | None,
+        explicit_value: int | None,
+        field: str,
     ) -> int | None:
-        if scenario_id is not None:
-            return scenario_id
+        """Resolve an int field from explicit value, message metadata, then chat."""
+
+        if explicit_value is not None:
+            return explicit_value
 
         metadata = message.get("metadata", {})
-        resolved_scenario_id = metadata.get("scenario_id")
-        if resolved_scenario_id is None:
+        resolved_value = metadata.get(field)
+        if resolved_value is None:
             chat = await self._chats.find_one(
                 {
                     "user_id": message["user_id"],
                     "chat_id": message["chat_id"],
                 },
-                {"scenario_id": 1},
+                {field: 1},
             )
-            resolved_scenario_id = chat.get("scenario_id") if chat else None
+            resolved_value = chat.get(field) if chat else None
 
         try:
-            return (
-                int(resolved_scenario_id) if resolved_scenario_id is not None else None
-            )
+            return int(resolved_value) if resolved_value is not None else None
         except (TypeError, ValueError):
             return None
 
@@ -584,6 +598,17 @@ class ChatHistoryService:
         if isinstance(value, list):
             return [str(item) for item in value if item is not None]
         return [str(value)]
+
+    @staticmethod
+    def _filter_candidates(value: str) -> list[str | int]:
+        """Match a stored id filter against both string and int representations."""
+
+        candidates: list[str | int] = [value]
+        try:
+            candidates.append(int(value))
+        except (TypeError, ValueError):
+            pass
+        return candidates
 
     @staticmethod
     def _normalize_ref(value: str) -> str:

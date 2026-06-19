@@ -32,6 +32,10 @@ db.createCollection("chats", {
           bsonType: ["string", "int", "null"],
           description: "Optional scenario identifier"
         },
+        project_id: {
+          bsonType: ["string", "int", "null"],
+          description: "Optional project identifier"
+        },
         title: {
           bsonType: ["string", "null"],
           description: "Optional chat title"
@@ -151,6 +155,8 @@ db.createCollection("messages", {
 
 db.chats.createIndex({ user_id: 1, updated_at: -1 });
 db.chats.createIndex({ user_id: 1, chat_id: 1 }, { unique: true });
+db.chats.createIndex({ user_id: 1, scenario_id: 1, updated_at: -1 });
+db.chats.createIndex({ user_id: 1, project_id: 1, updated_at: -1 });
 
 db.messages.createIndex({ user_id: 1, chat_id: 1, seq: 1 }, { unique: true });
 db.messages.createIndex({ user_id: 1, chat_id: 1, message_id: 1 }, { unique: true });

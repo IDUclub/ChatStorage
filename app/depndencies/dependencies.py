@@ -4,6 +4,7 @@ from app.common.auth.auth_client import AuthenticationClient
 from app.common.config.app_config import AppConfig
 from app.common.config.auth_config import AuthConfig
 from app.common.config.config_loader import load_config
+from app.common.db.migrations import run_migrations
 from app.common.db.mongo import create_mongo_client, get_database
 from app.depndencies.init_dependencies import init_dependencies
 from app.services.chat_history_service import ChatHistoryService
@@ -90,6 +91,12 @@ async def reinitialize_db_service() -> None:
     service._db = new_db
     service._chats = new_db["chats"]
     service._messages = new_db["messages"]
+
+
+async def run_startup_migrations() -> None:
+    """Apply pending MongoDB migrations using the current database connection."""
+
+    await run_migrations(app_deps["mongo_db"])
 
 
 async def close_mongo_client() -> None:
