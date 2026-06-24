@@ -18,7 +18,7 @@ def build_mongo_uri(config: AppConfig) -> str:
     password = quote_plus(config.MONGO_PASSWORD)
     return (
         f"mongodb://{user}:{password}@{config.MONGO_URL}/"
-        f"{config.MONGO_DB}?authSource={config.MONGO_DB}"
+        f"{config.MONGO_DB}?authSource=admin"
     )
 
 

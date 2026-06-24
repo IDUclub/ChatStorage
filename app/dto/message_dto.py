@@ -37,6 +37,7 @@ class ChatCreateDTO(BaseModel):
 
     title: str | None = Field(default=None, max_length=256)
     scenario_id: str | int | None = None
+    project_id: str | int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -54,5 +55,6 @@ class ToolCallExtractDTO(BaseModel):
     tool_call: ToolCallDTO
     previous_tool_calls: list[ToolCallDTO] = Field(default_factory=list)
     scenario_id: int | None = None
+    project_id: int | None = None
     mcp_source: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)

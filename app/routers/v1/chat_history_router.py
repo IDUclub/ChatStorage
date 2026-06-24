@@ -36,16 +36,24 @@ MESSAGE_ID_EXAMPLE = "8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1"
 async def get_user_chats(
     limit: int = Query(default=50, ge=1, le=100, examples=[20]),
     offset: int = Query(default=0, ge=0, examples=[0]),
+    scenario_id: str | None = Query(default=None, examples=["772"]),
+    project_id: str | None = Query(default=None, examples=["42"]),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatListSchema:
     """
     Example:
-    GET /api/v1/chat_history/chats?limit=20&offset=0
+    GET /api/v1/chat_history/chats?limit=20&offset=0&scenario_id=772&project_id=42
     Authorization: Bearer <token>
     """
 
-    return await service.get_chats(user_id=user_id, limit=limit, offset=offset)
+    return await service.get_chats(
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+        scenario_id=scenario_id,
+        project_id=project_id,
+    )
 
 
 @chat_history_router.get("/chats/titles", response_model=ChatTitleListSchema)
@@ -76,6 +84,7 @@ async def create_empty_user_chat(
                 "value": {
                     "title": "New assistant chat",
                     "scenario_id": "default",
+                    "project_id": 42,
                     "metadata": {"source": "web"},
                 },
             }
@@ -224,13 +233,14 @@ async def execute_tool_call(
     part_seq: int = Path(..., ge=1, examples=[7]),
     tool_call: int = Path(..., ge=1, examples=[1]),
     scenario_id: int | None = Query(default=None, examples=[772]),
+    project_id: int | None = Query(default=None, examples=[42]),
     user_id: str = Depends(get_current_user_id),
     token: str = Depends(get_current_access_token),
     service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
 ) -> ToolCallExecutionResultSchema:
     """
     Example:
-    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?scenario_id=772
+    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?scenario_id=772&project_id=42
     Authorization: Bearer <token>
     """
 
@@ -241,6 +251,7 @@ async def execute_tool_call(
         part_seq=part_seq,
         tool_call_step=tool_call,
         scenario_id=scenario_id,
+        project_id=project_id,
     )
 
 

@@ -1,0 +1,60 @@
+name: build and deploy
+
+on:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ${{ secrets.REGISTRY }}/chat_storage
+  CONTAINER_NAME: chat_storage
+
+jobs:
+  build:
+    runs-on: 99_runner
+    outputs:
+      now: ${{ steps.date.outputs.now }}
+
+    steps:
+      - name: Set current date
+        id: date
+        run: echo "now=$(date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy env
+        env:
+          ENV_PATH: ${{ secrets.ENV_PATH }}
+        run: cp "$ENV_PATH/.env" ./
+
+      - name: Build image
+        env:
+          NOW: ${{ steps.date.outputs.now }}
+        run: docker build -t "$IMAGE_NAME:$NOW" -f Dockerfile .
+
+      - name: Push image
+        env:
+          NOW: ${{ steps.date.outputs.now }}
+        run: docker push "$IMAGE_NAME:$NOW"
+
+  stop_container:
+    runs-on: 99_runner
+    needs: build
+
+    steps:
+      - name: Stop containers
+        run: docker rm -f "$CONTAINER_NAME" || true
+
+  run_container:
+    runs-on: 99_runner
+    needs: [build, stop_container]
+
+    env:
+      NOW: ${{ needs.build.outputs.now }}
+
+    steps:
+      - name: Set image env
+        run: |
+          echo "IMAGE=$IMAGE_NAME:$NOW" >> $GITHUB_ENV
+
+      - name: Run containers
+        run: docker compose -f docker-compose.actions.yaml up -d
