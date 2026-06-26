@@ -75,6 +75,87 @@ CHATS_VALIDATOR = {
 }
 
 
+# messages validator, kept in sync with mongo/init/01-init.js.
+MESSAGES_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": [
+            "user_id",
+            "chat_id",
+            "message_id",
+            "seq",
+            "role",
+            "parts",
+            "created_at",
+            "updated_at",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "_id": {},
+            "user_id": {
+                "bsonType": "string",
+                "pattern": UUID_PATTERN,
+                "description": "Required user UUID from auth token",
+            },
+            "chat_id": {
+                "bsonType": "string",
+                "pattern": UUID_PATTERN,
+                "description": "Required service-generated chat UUID",
+            },
+            "message_id": {
+                "bsonType": "string",
+                "pattern": UUID_PATTERN,
+                "description": "Required service-generated message UUID",
+            },
+            "seq": {
+                "bsonType": "int",
+                "minimum": 1,
+                "description": "Message sequence number inside one chat",
+            },
+            "role": {
+                "enum": ["user", "assistant", "system", "tool"],
+                "description": "Message role",
+            },
+            "parts": {
+                "bsonType": "array",
+                "minItems": 1,
+                "description": "Ordered message parts",
+                "items": {
+                    "bsonType": "object",
+                    "required": ["part_seq", "kind", "payload", "created_at"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "part_seq": {"bsonType": "int", "minimum": 1},
+                        "kind": {
+                            "enum": [
+                                "text",
+                                "tool_call",
+                                "tool_result",
+                                "status",
+                                "data",
+                                "file",
+                            ]
+                        },
+                        "payload": {"bsonType": "object"},
+                        "mcp_source": {
+                            "bsonType": ["string", "null"],
+                            "description": "Optional MCP server name that executed this tool",
+                        },
+                        "created_at": {"bsonType": "date"},
+                    },
+                },
+            },
+            "metadata": {
+                "bsonType": "object",
+                "description": "Optional model, token, trace, or client metadata",
+            },
+            "created_at": {"bsonType": "date", "description": "Creation date"},
+            "updated_at": {"bsonType": "date", "description": "Last update date"},
+        },
+    }
+}
+
+
 async def _migration_001_add_project_id(database: AsyncDatabase) -> None:
     """Add optional project_id to the chats collection validator."""
 
@@ -109,10 +190,35 @@ async def _migration_002_scenario_project_indexes(database: AsyncDatabase) -> No
     )
 
 
+async def _migration_003_add_file_part_kind(database: AsyncDatabase) -> None:
+    """Allow the "file" part kind in the messages collection validator."""
+
+    try:
+        await database.command(
+            {
+                "collMod": "messages",
+                "validator": MESSAGES_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code == _NAMESPACE_NOT_FOUND:
+            # Fresh database: messages is created by 01-init.js with the current
+            # schema, so there is nothing to migrate.
+            logger.info(
+                "Migration 003: messages collection does not exist yet, "
+                "skipping collMod"
+            )
+            return
+        raise
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
     ("002-scenario-project-indexes", _migration_002_scenario_project_indexes),
+    ("003-add-file-part-kind", _migration_003_add_file_part_kind),
 ]
 
 

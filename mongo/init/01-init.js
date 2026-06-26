@@ -119,7 +119,7 @@ db.createCollection("messages", {
                 minimum: 1
               },
               kind: {
-                enum: ["text", "tool_call", "tool_result", "status", "data"]
+                enum: ["text", "tool_call", "tool_result", "status", "data", "file"]
               },
               payload: {
                 bsonType: "object"

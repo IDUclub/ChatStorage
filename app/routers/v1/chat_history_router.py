@@ -161,6 +161,29 @@ async def post_message(
                     "metadata": {"model": "assistant"},
                 },
             },
+            "file_message": {
+                "summary": "Create message with a file reference",
+                "value": {
+                    "role": "assistant",
+                    "parts": [
+                        {
+                            "kind": "text",
+                            "payload": {"text": "Here is the generated report."},
+                        },
+                        {
+                            "kind": "file",
+                            "payload": {
+                                "url": "https://files.example.org/reports/effects.docx",
+                                "filename": "effects.docx",
+                                "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "size_bytes": 184320,
+                                "source_service": "ObjectEffectsAPI",
+                            },
+                        },
+                    ],
+                    "metadata": {"model": "assistant"},
+                },
+            },
         },
     ),
     chat_id: str = Path(
