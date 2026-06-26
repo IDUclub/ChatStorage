@@ -2,9 +2,27 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schema.chat_history_schema import MessagePartKind, MessageRole
+
+
+class FilePartPayload(BaseModel):
+    """Recommended payload shape for a file message part (``kind="file"``).
+
+    ChatStorage stores only a reference to the file, never the bytes. ``url`` is
+    required; the remaining fields are optional metadata that let the UI render
+    the attachment (name, icon, size) without downloading it. Extra keys are
+    preserved as-is, so producers may attach service-specific fields.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    url: str = Field(min_length=1)
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = Field(default=None, ge=0)
+    source_service: str | None = None
 
 
 class MessagePartCreateDTO(BaseModel):
@@ -13,6 +31,16 @@ class MessagePartCreateDTO(BaseModel):
     kind: MessagePartKind = "text"
     payload: dict[str, Any]
     mcp_source: str | None = None
+
+    @model_validator(mode="after")
+    def validate_file_payload(self) -> "MessagePartCreateDTO":
+        """Require a valid file reference for ``kind="file"`` parts."""
+
+        if self.kind == "file":
+            # Validates url presence/metadata types without mutating payload,
+            # so storage stays a plain dict like every other part kind.
+            FilePartPayload.model_validate(self.payload)
+        return self
 
 
 class MessageCreateDTO(BaseModel):

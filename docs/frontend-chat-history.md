@@ -43,7 +43,13 @@ type Chat = ChatSummary & {
 
 ```ts
 type MessageRole = "user" | "assistant" | "system" | "tool";
-type MessagePartKind = "text" | "tool_call" | "tool_result" | "status" | "data";
+type MessagePartKind =
+  | "text"
+  | "tool_call"
+  | "tool_result"
+  | "status"
+  | "data"
+  | "file";
 
 type Message = {
   message_id: string;
@@ -318,8 +324,58 @@ function getTextFromPart(part: MessagePart): string | null {
 - `tool_call` - показать компактный блок с названием инструмента и аргументами; дополнительно можно дать action на execute endpoint.
 - `tool_result` - показать результат инструмента, если он нужен пользователю.
 - `data` - рендерить по внутреннему контракту конкретного сценария; Chat Storage не валидирует форму `payload`.
+- `file` - показать вложение (имя, иконку по `mime_type`, размер) со ссылкой на скачивание `payload.url`. См. раздел ниже.
 
 Если фронт не знает тип part или структуру payload, лучше показать безопасный fallback: collapsed JSON/debug view для разработческих окружений или пропустить part в production UI.
+
+## Part с файлом (`kind: "file"`)
+
+Chat Storage **не хранит сами файлы — только ссылку на них**. Байты файла лежат в
+отдельном хранилище (его наполняет сервис-источник), а в истории сохраняется лишь
+референс. Это держит документы сообщений компактными (в MongoDB лимит 16 МБ на документ,
+а весь чат отдаётся одним запросом).
+
+Форма `payload` для `kind: "file"`:
+
+```ts
+type FilePartPayload = {
+  url: string;            // обязателен: ссылка на файл
+  filename?: string;      // отображаемое имя
+  mime_type?: string;     // для выбора иконки/превью
+  size_bytes?: number;    // размер в байтах
+  source_service?: string; // какой сервис породил файл
+  // допускаются дополнительные поля, специфичные для сервиса-источника
+};
+```
+
+В отличие от `data`, для `file` backend **валидирует** payload: поле `url` обязательно
+и непустое, иначе сохранение сообщения вернёт `422`. Остальные поля опциональны и
+служат для рендера вложения в UI без скачивания.
+
+Пример сообщения ассистента с текстом и файлом:
+
+```json
+{
+  "role": "assistant",
+  "parts": [
+    {
+      "kind": "text",
+      "payload": { "text": "Готов отчёт по эффектам." }
+    },
+    {
+      "kind": "file",
+      "payload": {
+        "url": "https://files.example.org/reports/effects.docx",
+        "filename": "effects.docx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "size_bytes": 184320,
+        "source_service": "ObjectEffectsAPI"
+      }
+    }
+  ],
+  "metadata": { "model": "assistant" }
+}
+```
 
 ## Рекомендуемый frontend flow
 
