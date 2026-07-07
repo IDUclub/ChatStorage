@@ -6,7 +6,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 MessageRole = Literal["user", "assistant", "system", "tool"]
-MessagePartKind = Literal["text", "tool_call", "tool_result", "status", "data", "file"]
+MessagePartKind = Literal[
+    "text", "tool_call", "tool_result", "status", "data", "table", "file"
+]
 
 
 class MessagePartSchema(BaseModel):

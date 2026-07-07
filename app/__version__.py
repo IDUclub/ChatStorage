@@ -2,6 +2,6 @@
 Module to store app metadata.
 """
 
-APP_VERSION = "0.1.5"
+APP_VERSION = "0.2.0"
 APP_NAME = "IDU LLM Chat History"
 APP_DESCRIPTION = "Fast API app to handle chat  history for urban db users."
