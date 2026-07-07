@@ -49,6 +49,7 @@ type MessagePartKind =
   | "tool_result"
   | "status"
   | "data"
+  | "table"
   | "file";
 
 type Message = {
@@ -324,9 +325,69 @@ function getTextFromPart(part: MessagePart): string | null {
 - `tool_call` - показать компактный блок с названием инструмента и аргументами; дополнительно можно дать action на execute endpoint.
 - `tool_result` - показать результат инструмента, если он нужен пользователю.
 - `data` - рендерить по внутреннему контракту конкретного сценария; Chat Storage не валидирует форму `payload`.
+- `table` - отрисовать таблицу по строгому контракту `payload.columns` + `payload.rows`. См. раздел ниже.
 - `file` - показать вложение (имя, иконку по `mime_type`, размер) со ссылкой на скачивание `payload.url`. См. раздел ниже.
 
 Если фронт не знает тип part или структуру payload, лучше показать безопасный fallback: collapsed JSON/debug view для разработческих окружений или пропустить part в production UI.
+
+## Part с таблицей (`kind: "table"`)
+
+Таблицы формируются сервисами (например, provision-агентом gMART) детерминированно —
+названия колонок фиксированы в коде сервиса и не генерируются LLM, поэтому UI может
+опираться на стабильные `key` колонок.
+
+Форма `payload` для `kind: "table"`:
+
+```ts
+type TableColumn = {
+  key: string;   // машинный ключ колонки, стабилен между запросами
+  label: string; // человекочитаемый заголовок (рус.)
+};
+
+type TablePartPayload = {
+  name: string;            // машинный идентификатор таблицы, напр. "provision_summary"
+  title?: string;          // заголовок таблицы для UI
+  columns: TableColumn[];  // порядок колонок задаёт порядок отображения
+  rows: Record<string, unknown>[]; // значения по ключам колонок
+  // допускаются дополнительные поля, специфичные для сервиса-источника
+};
+```
+
+Backend **валидирует** payload: обязательны непустые `name` и `columns` (у каждой
+колонки `key` и `label`), иначе сохранение сообщения вернёт `422`.
+
+Известные таблицы provision-агента:
+
+- `provision_summary` — сводка дефицитов/профицитов по сервисам; колонки
+  `service`, `capacity`, `demand`, `deficit`, `surplus`, `balance`; строки
+  отсортированы по убыванию дефицита.
+- `provision_metrics` — показатели обеспеченности одним сервисом; колонки
+  `metric`, `value`.
+- `effects_pivot` — сводные показатели эффектов проекта; колонки `metric`, `value`.
+
+Пример:
+
+```json
+{
+  "kind": "table",
+  "payload": {
+    "name": "provision_summary",
+    "title": "Сводка обеспеченности сервисами",
+    "columns": [
+      { "key": "service", "label": "Сервис" },
+      { "key": "capacity", "label": "Вместимость (чел)" },
+      { "key": "demand", "label": "Спрос (чел)" },
+      { "key": "deficit", "label": "Дефицит (чел)" },
+      { "key": "surplus", "label": "Профицит (чел)" },
+      { "key": "balance", "label": "Баланс (чел)" }
+    ],
+    "rows": [
+      { "service": "Школы", "capacity": 1200, "demand": 1450, "deficit": 250, "surplus": 0, "balance": -250 },
+      { "service": "Детские сады", "capacity": 800, "demand": 620, "deficit": 0, "surplus": 180, "balance": 180 }
+    ]
+  }
+}
+```
 
 ## Part с файлом (`kind: "file"`)
 
