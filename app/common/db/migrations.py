@@ -133,6 +133,7 @@ MESSAGES_VALIDATOR = {
                                 "tool_result",
                                 "status",
                                 "data",
+                                "table",
                                 "file",
                             ]
                         },
@@ -214,11 +215,36 @@ async def _migration_003_add_file_part_kind(database: AsyncDatabase) -> None:
         raise
 
 
+async def _migration_004_add_table_part_kind(database: AsyncDatabase) -> None:
+    """Allow the "table" part kind in the messages collection validator."""
+
+    try:
+        await database.command(
+            {
+                "collMod": "messages",
+                "validator": MESSAGES_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code == _NAMESPACE_NOT_FOUND:
+            # Fresh database: messages is created by 01-init.js with the current
+            # schema, so there is nothing to migrate.
+            logger.info(
+                "Migration 004: messages collection does not exist yet, "
+                "skipping collMod"
+            )
+            return
+        raise
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
     ("002-scenario-project-indexes", _migration_002_scenario_project_indexes),
     ("003-add-file-part-kind", _migration_003_add_file_part_kind),
+    ("004-add-table-part-kind", _migration_004_add_table_part_kind),
 ]
 
 

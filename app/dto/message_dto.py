@@ -25,6 +25,32 @@ class FilePartPayload(BaseModel):
     source_service: str | None = None
 
 
+class TableColumnPayload(BaseModel):
+    """Column contract of a strict table part: stable key + human label."""
+
+    model_config = ConfigDict(extra="allow")
+
+    key: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+
+
+class TablePartPayload(BaseModel):
+    """Recommended payload shape for a table message part (``kind="table"``).
+
+    Tables are produced by services (not by the LLM) with a fixed column
+    contract: ``columns`` defines machine-readable keys and human-readable
+    labels, ``rows`` hold values keyed by column key. Extra keys are preserved
+    as-is, so producers may attach service-specific fields.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(min_length=1)
+    title: str | None = None
+    columns: list[TableColumnPayload] = Field(min_length=1)
+    rows: list[dict[str, Any]]
+
+
 class MessagePartCreateDTO(BaseModel):
     """Message part payload received from client."""
 
@@ -33,13 +59,15 @@ class MessagePartCreateDTO(BaseModel):
     mcp_source: str | None = None
 
     @model_validator(mode="after")
-    def validate_file_payload(self) -> "MessagePartCreateDTO":
-        """Require a valid file reference for ``kind="file"`` parts."""
+    def validate_typed_payload(self) -> "MessagePartCreateDTO":
+        """Require valid payload shapes for typed part kinds."""
 
         if self.kind == "file":
             # Validates url presence/metadata types without mutating payload,
             # so storage stays a plain dict like every other part kind.
             FilePartPayload.model_validate(self.payload)
+        if self.kind == "table":
+            TablePartPayload.model_validate(self.payload)
         return self
 
 
