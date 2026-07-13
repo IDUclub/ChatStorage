@@ -61,3 +61,17 @@ class InvalidAudienceError(AuthError):
 
     status_code: int = 403
     message: str = "Invalid token audience."
+
+
+class ServiceTokenUserIdRequiredError(AuthError):
+    """
+    Exception to raise when a service token is used without an X-User-Id header.
+    Attributes:
+        status_code (int): HTTP status code to raise. Equal to 400.
+        message (str): Message sent to user.
+    """
+
+    status_code: int = 400
+    message: str = (
+        "X-User-Id header is required when authenticating with a service token."
+    )
