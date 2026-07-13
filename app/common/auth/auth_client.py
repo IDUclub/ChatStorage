@@ -15,10 +15,15 @@ from app.common.exceptions.auth import (
     ChatStorageAuthDecodeError,
     InvalidAudienceError,
     InvalidTokenSignatureError,
+    ServiceTokenUserIdRequiredError,
     TokenExpiredError,
 )
 
 JWKS_CACHE_KEY = "jwks"
+
+# Keycloak client-credentials (service) tokens carry a service-account
+# preferred_username of the form "service-account-<client-id>".
+SERVICE_ACCOUNT_PREFIX = "service-account-"
 
 
 class AuthenticationClient:
@@ -160,3 +165,48 @@ class AuthenticationClient:
         user_id = payload.get("sub")
         self._user_cache[token] = user_id
         return user_id
+
+    @staticmethod
+    def is_service_token(payload: dict[str, Any]) -> bool:
+        """Return True if the token payload belongs to a Keycloak service account.
+
+        Args:
+            payload (dict[str, Any]): Decoded JWT claims.
+        Returns:
+            bool: True for client-credentials (service) tokens.
+        """
+
+        preferred_username = payload.get("preferred_username") or ""
+        return isinstance(preferred_username, str) and preferred_username.startswith(
+            SERVICE_ACCOUNT_PREFIX
+        )
+
+    async def resolve_user_id(
+        self,
+        token: str,
+        service_user_id: str | None = None,
+    ) -> int | str | None:
+        """Resolve the effective user id, honoring service tokens.
+
+        For service tokens (Keycloak client-credentials) the effective user id
+        is taken from ``service_user_id`` (the ``X-User-Id`` header), since the
+        token ``sub`` is the service account rather than an end user. For regular
+        user tokens the id is the token ``sub`` claim and ``service_user_id`` is
+        ignored to prevent one user acting on behalf of another.
+
+        Args:
+            token (str): Raw bearer token.
+            service_user_id (str | None): User id supplied via ``X-User-Id``,
+                only honored for service tokens.
+        Returns:
+            int | str | None: Effective user id, or None if the token has no sub.
+        Raises:
+            ServiceTokenUserIdRequiredError: Service token used without X-User-Id.
+        """
+
+        payload = await self.process_token(token)
+        if self.is_service_token(payload):
+            if not service_user_id:
+                raise ServiceTokenUserIdRequiredError()
+            return service_user_id
+        return payload.get("sub")
