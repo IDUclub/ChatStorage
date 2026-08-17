@@ -157,21 +157,48 @@ class ChatHistoryService:
         )
         return ChatTitleListSchema(items=sorted(titles))
 
-    async def get_chat(self, user_id: str, chat_id: str) -> ChatSchema:
-        """Get user chat with ordered messages."""
+    async def get_chat(
+        self,
+        user_id: str,
+        chat_id: str,
+        message_limit: int | None = None,
+        before_seq: int | None = None,
+    ) -> ChatSchema:
+        """Get a user chat with an optional backwards page of ordered messages."""
 
         chat = await self._chats.find_one({"user_id": user_id, "chat_id": chat_id})
         if not chat:
             raise self._not_found(chat_id)
 
-        cursor = self._messages.find({"user_id": user_id, "chat_id": chat_id}).sort(
-            "seq",
-            1,
-        )
-        messages = [self._message_from_document(document) async for document in cursor]
+        message_filter: dict[str, Any] = {"user_id": user_id, "chat_id": chat_id}
+        if before_seq is not None:
+            message_filter["seq"] = {"$lt": before_seq}
+
+        if message_limit is None:
+            cursor = self._messages.find(message_filter).sort("seq", 1)
+            documents = [document async for document in cursor]
+            has_more = False
+        else:
+            cursor = (
+                self._messages.find(message_filter)
+                .sort("seq", -1)
+                .limit(message_limit + 1)
+            )
+            documents = [document async for document in cursor]
+            has_more = len(documents) > message_limit
+            documents = documents[:message_limit]
+            documents.reverse()
+
+        messages = [self._message_from_document(document) for document in documents]
+        next_before_seq = messages[0].seq if has_more and messages else None
 
         summary = self._chat_summary_from_document(chat)
-        return ChatSchema(**summary.model_dump(), messages=messages)
+        return ChatSchema(
+            **summary.model_dump(),
+            messages=messages,
+            has_more=has_more,
+            next_before_seq=next_before_seq,
+        )
 
     async def delete_chat(self, user_id: str, chat_id: str) -> DeleteChatSchema:
         """Delete user chat and all its messages."""
@@ -183,6 +210,10 @@ class ChatHistoryService:
         message_result = await self._messages.delete_many(
             {"user_id": user_id, "chat_id": chat_id}
         )
+        identity = {"user_id": user_id, "chat_id": chat_id}
+        await self._db["chat_contexts"].delete_many(identity)
+        await self._db["chat_context_revisions"].delete_many(identity)
+        await self._db["context_jobs"].delete_many(identity)
         return DeleteChatSchema(
             chat_id=chat_id,
             deleted_messages=message_result.deleted_count,

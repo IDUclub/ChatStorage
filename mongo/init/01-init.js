@@ -119,7 +119,10 @@ db.createCollection("messages", {
                 minimum: 1
               },
               kind: {
-                enum: ["text", "tool_call", "tool_result", "status", "data", "table", "file"]
+                enum: [
+                  "text", "tool_call", "tool_result", "status", "data", "table", "file",
+                  "plan", "plan_revision", "artifact_ref", "validation", "failure"
+                ]
               },
               payload: {
                 bsonType: "object"
@@ -161,3 +164,88 @@ db.chats.createIndex({ user_id: 1, project_id: 1, updated_at: -1 });
 db.messages.createIndex({ user_id: 1, chat_id: 1, seq: 1 }, { unique: true });
 db.messages.createIndex({ user_id: 1, chat_id: 1, message_id: 1 }, { unique: true });
 db.messages.createIndex({ user_id: 1, chat_id: 1, created_at: 1 });
+
+db.createCollection("chat_contexts", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: [
+        "user_id", "chat_id", "revision", "content", "updated_through_seq",
+        "target_seq", "model", "prompt_version", "status", "created_at", "updated_at"
+      ],
+      additionalProperties: false,
+      properties: {
+        _id: {}, user_id: { bsonType: "string", pattern: uuidPattern },
+        chat_id: { bsonType: "string", pattern: uuidPattern },
+        revision: { bsonType: "int", minimum: 1 },
+        content: { bsonType: "object" },
+        updated_through_seq: { bsonType: "int", minimum: 1 },
+        target_seq: { bsonType: "int", minimum: 1 },
+        model: { bsonType: "string" }, prompt_version: { bsonType: "string" },
+        status: { enum: ["ready", "failed"] },
+        last_error: { bsonType: ["string", "null"] },
+        created_at: { bsonType: "date" }, updated_at: { bsonType: "date" }
+      }
+    }
+  }, validationAction: "error", validationLevel: "strict"
+});
+
+db.createCollection("chat_context_revisions", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: [
+        "user_id", "chat_id", "revision", "content", "updated_through_seq",
+        "target_seq", "model", "prompt_version", "status", "created_at",
+        "updated_at", "archived_at"
+      ],
+      additionalProperties: false,
+      properties: {
+        _id: {}, user_id: { bsonType: "string", pattern: uuidPattern },
+        chat_id: { bsonType: "string", pattern: uuidPattern },
+        revision: { bsonType: "int", minimum: 1 }, content: { bsonType: "object" },
+        updated_through_seq: { bsonType: "int", minimum: 1 },
+        target_seq: { bsonType: "int", minimum: 1 },
+        model: { bsonType: "string" }, prompt_version: { bsonType: "string" },
+        status: { enum: ["ready", "failed"] },
+        last_error: { bsonType: ["string", "null"] },
+        created_at: { bsonType: "date" }, updated_at: { bsonType: "date" },
+        archived_at: { bsonType: "date" }
+      }
+    }
+  }, validationAction: "error", validationLevel: "strict"
+});
+db.createCollection("context_jobs", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: [
+        "job_id", "user_id", "chat_id", "target_seq", "model", "prompt_version",
+        "status", "attempts", "created_at", "updated_at"
+      ],
+      additionalProperties: false,
+      properties: {
+        _id: {}, job_id: { bsonType: "string", pattern: uuidPattern },
+        user_id: { bsonType: "string", pattern: uuidPattern },
+        chat_id: { bsonType: "string", pattern: uuidPattern },
+        target_seq: { bsonType: "int", minimum: 1 },
+        model: { bsonType: "string" }, prompt_version: { bsonType: "string" },
+        status: { enum: ["pending", "leased", "completed", "failed"] },
+        attempts: { bsonType: "int", minimum: 0, maximum: 3 },
+        lease_owner: { bsonType: ["string", "null"] },
+        lease_until: { bsonType: ["date", "null"] },
+        last_error: { bsonType: ["string", "null"] },
+        created_at: { bsonType: "date" }, updated_at: { bsonType: "date" }
+      }
+    }
+  }, validationAction: "error", validationLevel: "strict"
+});
+
+db.chat_contexts.createIndex({ user_id: 1, chat_id: 1 }, { unique: true });
+db.chat_context_revisions.createIndex({ user_id: 1, chat_id: 1, revision: -1 });
+db.chat_context_revisions.createIndex({ archived_at: 1 }, { expireAfterSeconds: 604800 });
+db.context_jobs.createIndex(
+  { user_id: 1, chat_id: 1, target_seq: 1, prompt_version: 1 },
+  { unique: true }
+);
+db.context_jobs.createIndex({ status: 1, lease_until: 1, created_at: 1 });

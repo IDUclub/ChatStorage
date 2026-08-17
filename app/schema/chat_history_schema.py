@@ -7,7 +7,18 @@ from pydantic import BaseModel, Field
 
 MessageRole = Literal["user", "assistant", "system", "tool"]
 MessagePartKind = Literal[
-    "text", "tool_call", "tool_result", "status", "data", "table", "file"
+    "text",
+    "tool_call",
+    "tool_result",
+    "status",
+    "data",
+    "table",
+    "file",
+    "plan",
+    "plan_revision",
+    "artifact_ref",
+    "validation",
+    "failure",
 ]
 
 
@@ -50,6 +61,8 @@ class ChatSchema(ChatSummarySchema):
     """Full chat with messages."""
 
     messages: list[MessageSchema] = Field(default_factory=list)
+    has_more: bool = False
+    next_before_seq: int | None = None
 
 
 class ChatListSchema(BaseModel):

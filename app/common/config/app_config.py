@@ -32,6 +32,7 @@ class AppConfig:
         mongo_db: str,
         idu_mcp_url: str,
         mcp_sources: dict[str, str] | None = None,
+        context_internal_api_key: str | None = None,
     ):
         """
         Initialization function for AppConfig class.
@@ -51,6 +52,7 @@ class AppConfig:
         self.MONGO_DB = self.validate_init_parameter(mongo_db, "MONGO_DB")
         self.IDU_MCP_URL = self.validate_init_parameter(idu_mcp_url, "IDU_MCP_URL")
         self.MCP_SOURCES: dict[str, str] = mcp_sources or {}
+        self.CONTEXT_INTERNAL_API_KEY = context_internal_api_key or None
         self.WORKDIR = Path.cwd()
         self.CHATSTORAGE_LOG_DIR = resolve_logs_path(
             os.getenv("CHATSTORAGE_LOG_DIR"), self.WORKDIR
@@ -103,6 +105,9 @@ class AppConfig:
             "MONGO_DB": self.MONGO_DB,
             "IDU_MCP_URL": self.IDU_MCP_URL,
             "MCP_SOURCES": str(self.MCP_SOURCES),
+            "CONTEXT_INTERNAL_API_KEY_CONFIGURED": str(
+                bool(self.CONTEXT_INTERNAL_API_KEY)
+            ),
             "LOGS_DIR": str(self.CHATSTORAGE_LOG_DIR),
             "LOG_FILE": self.CHATSTORAGE_LOG_FILE,
             "PATH_TO_LOG": str(self.PATH_TO_LOG),

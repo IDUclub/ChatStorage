@@ -129,7 +129,11 @@ class TestResolveMcpUrl:
         return ToolCallExecutionService(
             idu_mcp_url="http://idu-mcp/mcp",
             chain_builder=ChatHistoryService(MagicMock()),
-            mcp_sources={"effects": "http://effects/mcp"},
+            mcp_sources={
+                "effects": "http://effects/mcp",
+                "objects_effects": "http://objects-effects/mcp",
+                "urban_projects": "http://urban/mcp/projects/",
+            },
         )
 
     def test_known_source(self) -> None:
@@ -140,6 +144,18 @@ class TestResolveMcpUrl:
 
     def test_none_source_falls_back(self) -> None:
         assert self._service()._resolve_mcp_url(None) == "http://idu-mcp/mcp"
+
+    def test_env_style_source_is_normalized(self) -> None:
+        assert (
+            self._service()._resolve_mcp_url("OBJECTS_EFFECTS_MCP_URL")
+            == "http://objects-effects/mcp"
+        )
+
+    def test_grouped_urban_source_is_normalized(self) -> None:
+        assert (
+            self._service()._resolve_mcp_url("URBAN_MCP/projects")
+            == "http://urban/mcp/projects/"
+        )
 
 
 class TestExecuteGuard:

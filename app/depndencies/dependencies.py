@@ -7,6 +7,7 @@ from app.common.config.config_loader import load_config
 from app.common.db.migrations import run_migrations
 from app.common.db.mongo import create_mongo_client, get_database
 from app.depndencies.init_dependencies import init_dependencies
+from app.services.chat_context_service import ChatContextService
 from app.services.chat_history_service import ChatHistoryService
 from app.services.tool_call_execution_service import ToolCallExecutionService
 
@@ -64,6 +65,12 @@ async def get_chat_history_service() -> ChatHistoryService:
     return app_deps["chat_history_service"]
 
 
+async def get_chat_context_service() -> ChatContextService:
+    """Return the shared context snapshot/job service."""
+
+    return app_deps["chat_context_service"]
+
+
 async def get_tool_call_execution_service() -> ToolCallExecutionService:
     """
     Function returns ToolCallExecutionService instance for current app.
@@ -91,6 +98,13 @@ async def reinitialize_db_service() -> None:
     service._db = new_db
     service._chats = new_db["chats"]
     service._messages = new_db["messages"]
+    context_service: ChatContextService = app_deps["chat_context_service"]
+    context_service._db = new_db
+    context_service._chats = new_db["chats"]
+    context_service._messages = new_db["messages"]
+    context_service._contexts = new_db["chat_contexts"]
+    context_service._revisions = new_db["chat_context_revisions"]
+    context_service._jobs = new_db["context_jobs"]
 
 
 async def run_startup_migrations() -> None:
