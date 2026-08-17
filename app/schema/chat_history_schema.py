@@ -50,6 +50,8 @@ class ChatSchema(ChatSummarySchema):
     """Full chat with messages."""
 
     messages: list[MessageSchema] = Field(default_factory=list)
+    has_more: bool = False
+    next_before_seq: int | None = None
 
 
 class ChatListSchema(BaseModel):

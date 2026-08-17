@@ -42,6 +42,8 @@ type ChatSummary = {
 ```ts
 type Chat = ChatSummary & {
   messages: Message[];
+  has_more: boolean;
+  next_before_seq: number | null;
 };
 ```
 
@@ -191,6 +193,19 @@ GET /api/v1/chat_history/{chat_id}
 Authorization: Bearer <token>
 ```
 
+Без query-параметров endpoint сохраняет прежнее поведение и возвращает все сообщения.
+Для больших диалогов используйте обратную пагинацию:
+
+```http
+GET /api/v1/chat_history/{chat_id}?message_limit=40
+GET /api/v1/chat_history/{chat_id}?message_limit=40&before_seq=121
+```
+
+- `message_limit` — размер страницы от `1` до `100`. Первая страница содержит последние сообщения.
+- `before_seq` — вернуть сообщения с `seq` меньше указанного значения.
+- Сообщения в каждой странице всегда отсортированы по `seq` от старых к новым.
+- Если `has_more=true`, следующую страницу нужно запросить с `before_seq=next_before_seq`.
+
 Ответ: `Chat`.
 
 Пример:
@@ -204,6 +219,8 @@ Authorization: Bearer <token>
   "metadata": {},
   "created_at": "2026-05-08T14:00:00Z",
   "updated_at": "2026-05-08T14:10:00Z",
+  "has_more": false,
+  "next_before_seq": null,
   "messages": [
     {
       "message_id": "8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1",
