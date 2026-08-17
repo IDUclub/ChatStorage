@@ -54,6 +54,8 @@ Configured via environment variables (see [`.env.example`](.env.example)):
 | `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DB` | MongoDB credentials and database |
 | `IDU_MCP_URL` | gMART IDU MCP base — default target for tool-call replay |
 | `OBJECTS_EFFECTS_MCP_URL` | Object Effects MCP base — alternate replay target |
+| `DVD_MCP_URL`, `NORM_GRAPH_MCP_URL` | Document and normative graph MCP replay targets |
+| `URBAN_<GROUP>_MCP_URL` | One of the six grouped Urban MCP targets (`PROJECTS`, `TERRITORIES`, `PHYSICAL_OBJECTS`, `DICTIONARIES`, `INDICATORS`, `SOC_GROUPS`) |
 | `AUTH_VERIFY` | Toggle JWT signature verification on/off |
 | `AUTH_SERVER_URL`, `AUTH_CLIENT_ID`, `AUTH_VALID_AUDIENCES` | Keycloak realm + audience validation |
 | `CHATSTORAGE_LOG_DIR`, `CHATSTORAGE_LOG_FILE` | Log file location |

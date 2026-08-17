@@ -113,16 +113,23 @@ async def get_user_chat_by_id(
         max_length=36,
         examples=[CHAT_ID_EXAMPLE],
     ),
+    message_limit: int | None = Query(default=None, ge=1, le=100, examples=[40]),
+    before_seq: int | None = Query(default=None, ge=1, examples=[121]),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatSchema:
     """
     Example:
-    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479
+    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479?message_limit=40&before_seq=121
     Authorization: Bearer <token>
     """
 
-    return await service.get_chat(user_id=user_id, chat_id=chat_id)
+    return await service.get_chat(
+        user_id=user_id,
+        chat_id=chat_id,
+        message_limit=message_limit,
+        before_seq=before_seq,
+    )
 
 
 @chat_history_router.post(

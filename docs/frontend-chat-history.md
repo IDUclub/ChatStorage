@@ -42,6 +42,8 @@ type ChatSummary = {
 ```ts
 type Chat = ChatSummary & {
   messages: Message[];
+  has_more: boolean;
+  next_before_seq: number | null;
 };
 ```
 
@@ -56,7 +58,12 @@ type MessagePartKind =
   | "status"
   | "data"
   | "table"
-  | "file";
+  | "file"
+  | "plan"
+  | "plan_revision"
+  | "artifact_ref"
+  | "validation"
+  | "failure";
 
 type Message = {
   message_id: string;
@@ -191,6 +198,19 @@ GET /api/v1/chat_history/{chat_id}
 Authorization: Bearer <token>
 ```
 
+Без query-параметров endpoint сохраняет прежнее поведение и возвращает все сообщения.
+Для больших диалогов используйте обратную пагинацию:
+
+```http
+GET /api/v1/chat_history/{chat_id}?message_limit=40
+GET /api/v1/chat_history/{chat_id}?message_limit=40&before_seq=121
+```
+
+- `message_limit` — размер страницы от `1` до `100`. Первая страница содержит последние сообщения.
+- `before_seq` — вернуть сообщения с `seq` меньше указанного значения.
+- Сообщения в каждой странице всегда отсортированы по `seq` от старых к новым.
+- Если `has_more=true`, следующую страницу нужно запросить с `before_seq=next_before_seq`.
+
 Ответ: `Chat`.
 
 Пример:
@@ -204,6 +224,8 @@ Authorization: Bearer <token>
   "metadata": {},
   "created_at": "2026-05-08T14:00:00Z",
   "updated_at": "2026-05-08T14:10:00Z",
+  "has_more": false,
+  "next_before_seq": null,
   "messages": [
     {
       "message_id": "8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1",
@@ -237,6 +259,36 @@ Authorization: Bearer <token>
 
 Метод полезен, если UI хранит компактную версию сообщения и хочет дозагрузить тяжелый `data` или `tool_result` part по клику.
 
+## Актуальный контекст диалога
+
+Scenario-data хранит отдельно от сообщений опубликованный сжатый контекст в двух
+представлениях: русский `summary` и структурированный объект с подтверждёнными
+фактами, решениями, маппингами, наборами данных, выполненными задачами и открытыми
+вопросами. Геометрии, полные таблицы, токены и внутренние рассуждения туда не входят.
+
+```http
+GET /api/v1/chat_context/{chat_id}?tail_limit=100
+Authorization: Bearer <token>
+```
+
+Ответ содержит опубликованную `revision`, `content`, `updated_through_seq` и
+необработанный `tail`. Для большого хвоста используются `tail_has_more` и
+`tail_next_after_seq`. После финализации сообщения gMART ставит неблокирующую задачу:
+
+```http
+POST /api/v1/chat_context/{chat_id}/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"target_seq": 42, "model": "gpt-oss-20b", "prompt_version": "scenario-data-v1"}
+```
+
+Внутренние endpoints claim/source/complete/fail доступны только context worker по
+`X-Internal-API-Key`. Worker читает хвост порциями и иерархически сворачивает их в
+один контекст. Публикация защищена CAS по `updated_through_seq`; хранится до десяти
+ревизий не старше семи дней, задача повторяется не более трёх раз. Временный API key
+следует заменить сервисным токеном до production-развёртывания.
+
 ### Выполнить сохраненный tool call
 
 ```http
@@ -249,6 +301,11 @@ Path:
 - `message_id` - id сообщения, где лежит part с tool calls.
 - `part_seq` - номер part внутри сообщения.
 - `tool_call` - порядковый номер tool call внутри part, начиная с `1`.
+
+Источник вызова берётся из `part.mcp_source`. ChatStorage понимает как короткие ключи,
+так и сохраняемые gMART обозначения (`IDU_MCP_URL`, `OBJECTS_EFFECTS_MCP_URL`,
+`DVD_MCP_URL`, `NORM_GRAPH_MCP_URL`, `URBAN_MCP/<group>`). Они сопоставляются с
+одноимёнными переменными окружения; неизвестный источник использует `IDU_MCP_URL`.
 
 Query:
 
@@ -607,4 +664,3 @@ Authorization: Bearer <token>
 ```
 
 Рекомендация для UI: после успешного удаления убрать чат из sidebar и, если он был открыт, сбросить текущий диалог в пустое состояние.
-

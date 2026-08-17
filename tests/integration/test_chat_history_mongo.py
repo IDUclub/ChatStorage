@@ -59,6 +59,43 @@ async def test_get_chat_unknown_id_raises_404(service: ChatHistoryService) -> No
     assert exc_info.value.status_code == 404
 
 
+async def test_get_chat_pages_backwards_from_latest(
+    service: ChatHistoryService,
+) -> None:
+    user_id = _user_id()
+    chat = await service.create_chat(user_id)
+    for index in range(1, 6):
+        await service.add_message(
+            user_id,
+            chat.chat_id,
+            MessageCreateDTO(role="user", content=f"message-{index}"),
+        )
+
+    latest = await service.get_chat(user_id, chat.chat_id, message_limit=2)
+    previous = await service.get_chat(
+        user_id,
+        chat.chat_id,
+        message_limit=2,
+        before_seq=latest.next_before_seq,
+    )
+    oldest = await service.get_chat(
+        user_id,
+        chat.chat_id,
+        message_limit=2,
+        before_seq=previous.next_before_seq,
+    )
+
+    assert [message.seq for message in latest.messages] == [4, 5]
+    assert latest.has_more is True
+    assert latest.next_before_seq == 4
+    assert [message.seq for message in previous.messages] == [2, 3]
+    assert previous.has_more is True
+    assert previous.next_before_seq == 2
+    assert [message.seq for message in oldest.messages] == [1]
+    assert oldest.has_more is False
+    assert oldest.next_before_seq is None
+
+
 async def test_add_text_message_increments_seq(service: ChatHistoryService) -> None:
     user_id = _user_id()
     chat = await service.create_chat(user_id)

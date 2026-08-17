@@ -55,6 +55,8 @@ tests/                   # наборы unit/ и integration/ (см. tests/READM
 | `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DB` | Учётные данные и имя базы MongoDB |
 | `IDU_MCP_URL` | База gMART IDU MCP — цель по умолчанию для воспроизведения tool-call |
 | `OBJECTS_EFFECTS_MCP_URL` | База Object Effects MCP — альтернативная цель |
+| `DVD_MCP_URL`, `NORM_GRAPH_MCP_URL` | MCP-серверы документов и нормативного графа для воспроизведения |
+| `URBAN_<GROUP>_MCP_URL` | Один из шести grouped Urban MCP endpoints (`PROJECTS`, `TERRITORIES`, `PHYSICAL_OBJECTS`, `DICTIONARIES`, `INDICATORS`, `SOC_GROUPS`) |
 | `AUTH_VERIFY` | Включение/выключение проверки подписи JWT |
 | `AUTH_SERVER_URL`, `AUTH_CLIENT_ID`, `AUTH_VALID_AUDIENCES` | Realm Keycloak + проверка audience |
 | `CHATSTORAGE_LOG_DIR`, `CHATSTORAGE_LOG_FILE` | Расположение файла логов |

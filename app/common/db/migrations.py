@@ -135,6 +135,11 @@ MESSAGES_VALIDATOR = {
                                 "data",
                                 "table",
                                 "file",
+                                "plan",
+                                "plan_revision",
+                                "artifact_ref",
+                                "validation",
+                                "failure",
                             ]
                         },
                         "payload": {"bsonType": "object"},
@@ -152,6 +157,88 @@ MESSAGES_VALIDATOR = {
             },
             "created_at": {"bsonType": "date", "description": "Creation date"},
             "updated_at": {"bsonType": "date", "description": "Last update date"},
+        },
+    }
+}
+
+CONTEXT_PROPERTIES = {
+    "_id": {},
+    "user_id": {"bsonType": "string", "pattern": UUID_PATTERN},
+    "chat_id": {"bsonType": "string", "pattern": UUID_PATTERN},
+    "revision": {"bsonType": "int", "minimum": 1},
+    "content": {"bsonType": "object"},
+    "updated_through_seq": {"bsonType": "int", "minimum": 1},
+    "target_seq": {"bsonType": "int", "minimum": 1},
+    "model": {"bsonType": "string"},
+    "prompt_version": {"bsonType": "string"},
+    "status": {"enum": ["ready", "failed"]},
+    "last_error": {"bsonType": ["string", "null"]},
+    "created_at": {"bsonType": "date"},
+    "updated_at": {"bsonType": "date"},
+}
+CONTEXT_REQUIRED = [
+    "user_id",
+    "chat_id",
+    "revision",
+    "content",
+    "updated_through_seq",
+    "target_seq",
+    "model",
+    "prompt_version",
+    "status",
+    "created_at",
+    "updated_at",
+]
+CONTEXTS_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": CONTEXT_REQUIRED,
+        "additionalProperties": False,
+        "properties": CONTEXT_PROPERTIES,
+    }
+}
+REVISIONS_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": [*CONTEXT_REQUIRED, "archived_at"],
+        "additionalProperties": False,
+        "properties": {
+            **CONTEXT_PROPERTIES,
+            "archived_at": {"bsonType": "date"},
+        },
+    }
+}
+JOBS_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": [
+            "job_id",
+            "user_id",
+            "chat_id",
+            "target_seq",
+            "model",
+            "prompt_version",
+            "status",
+            "attempts",
+            "created_at",
+            "updated_at",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "_id": {},
+            "job_id": {"bsonType": "string", "pattern": UUID_PATTERN},
+            "user_id": {"bsonType": "string", "pattern": UUID_PATTERN},
+            "chat_id": {"bsonType": "string", "pattern": UUID_PATTERN},
+            "target_seq": {"bsonType": "int", "minimum": 1},
+            "model": {"bsonType": "string"},
+            "prompt_version": {"bsonType": "string"},
+            "status": {"enum": ["pending", "leased", "completed", "failed"]},
+            "attempts": {"bsonType": "int", "minimum": 0, "maximum": 3},
+            "lease_owner": {"bsonType": ["string", "null"]},
+            "lease_until": {"bsonType": ["date", "null"]},
+            "last_error": {"bsonType": ["string", "null"]},
+            "created_at": {"bsonType": "date"},
+            "updated_at": {"bsonType": "date"},
         },
     }
 }
@@ -239,12 +326,71 @@ async def _migration_004_add_table_part_kind(database: AsyncDatabase) -> None:
         raise
 
 
+async def _migration_005_context_storage(database: AsyncDatabase) -> None:
+    """Add typed context snapshots, revisions and the durable worker queue."""
+
+    try:
+        await database.command(
+            {
+                "collMod": "messages",
+                "validator": MESSAGES_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code != _NAMESPACE_NOT_FOUND:
+            raise
+
+    existing = set(await database.list_collection_names())
+    validators = {
+        "chat_contexts": CONTEXTS_VALIDATOR,
+        "chat_context_revisions": REVISIONS_VALIDATOR,
+        "context_jobs": JOBS_VALIDATOR,
+    }
+    for collection, validator in validators.items():
+        if collection not in existing:
+            await database.create_collection(collection, validator=validator)
+        else:
+            await database.command(
+                {
+                    "collMod": collection,
+                    "validator": validator,
+                    "validationAction": "error",
+                    "validationLevel": "strict",
+                }
+            )
+
+    await database["chat_contexts"].create_index(
+        [("user_id", ASCENDING), ("chat_id", ASCENDING)], unique=True
+    )
+    await database["chat_context_revisions"].create_index(
+        [("user_id", ASCENDING), ("chat_id", ASCENDING), ("revision", DESCENDING)]
+    )
+    await database["chat_context_revisions"].create_index(
+        [("archived_at", ASCENDING)], expireAfterSeconds=7 * 24 * 60 * 60
+    )
+    await database["context_jobs"].create_index(
+        [
+            ("user_id", ASCENDING),
+            ("chat_id", ASCENDING),
+            ("target_seq", ASCENDING),
+            ("prompt_version", ASCENDING),
+        ],
+        unique=True,
+    )
+    await database["context_jobs"].create_index(
+        [("status", ASCENDING), ("lease_until", ASCENDING), ("created_at", ASCENDING)]
+    )
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
     ("002-scenario-project-indexes", _migration_002_scenario_project_indexes),
     ("003-add-file-part-kind", _migration_003_add_file_part_kind),
     ("004-add-table-part-kind", _migration_004_add_table_part_kind),
+    ("005-context-storage", _migration_005_context_storage),
 ]
 
 
