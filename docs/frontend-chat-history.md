@@ -250,6 +250,11 @@ Path:
 - `part_seq` - номер part внутри сообщения.
 - `tool_call` - порядковый номер tool call внутри part, начиная с `1`.
 
+Источник вызова берётся из `part.mcp_source`. ChatStorage понимает как короткие ключи,
+так и сохраняемые gMART обозначения (`IDU_MCP_URL`, `OBJECTS_EFFECTS_MCP_URL`,
+`DVD_MCP_URL`, `NORM_GRAPH_MCP_URL`, `URBAN_MCP/<group>`). Они сопоставляются с
+одноимёнными переменными окружения; неизвестный источник использует `IDU_MCP_URL`.
+
 Query:
 
 - `scenario_id` - необязательный. Если не передать, backend попробует взять его из `message.metadata.scenario_id`, затем из `chat.scenario_id`.
@@ -607,4 +612,3 @@ Authorization: Bearer <token>
 ```
 
 Рекомендация для UI: после успешного удаления убрать чат из sidebar и, если он был открыт, сбросить текущий диалог в пустое состояние.
-

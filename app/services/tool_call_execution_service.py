@@ -191,6 +191,12 @@ class ToolCallExecutionService:
 
     def _resolve_mcp_url(self, mcp_source: str | None) -> str:
         """Return the MCP server URL for the given source name, falling back to IDU_MCP_URL."""
-        if mcp_source and mcp_source in self._mcp_sources:
-            return self._mcp_sources[mcp_source]
+        if mcp_source:
+            normalized = mcp_source.strip().lower()
+            if normalized.endswith("_mcp_url"):
+                normalized = normalized[: -len("_mcp_url")]
+            elif normalized.startswith("urban_mcp/"):
+                normalized = "urban_" + normalized.split("/", 1)[1]
+            if normalized in self._mcp_sources:
+                return self._mcp_sources[normalized]
         return self._idu_mcp_url
