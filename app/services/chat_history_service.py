@@ -210,6 +210,10 @@ class ChatHistoryService:
         message_result = await self._messages.delete_many(
             {"user_id": user_id, "chat_id": chat_id}
         )
+        identity = {"user_id": user_id, "chat_id": chat_id}
+        await self._db["chat_contexts"].delete_many(identity)
+        await self._db["chat_context_revisions"].delete_many(identity)
+        await self._db["context_jobs"].delete_many(identity)
         return DeleteChatSchema(
             chat_id=chat_id,
             deleted_messages=message_result.deleted_count,

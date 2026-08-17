@@ -16,6 +16,10 @@ from app.depndencies.dependencies import (
     run_startup_migrations,
 )
 from app.routers.system_controller import system_router
+from app.routers.v1.chat_context_router import (
+    chat_context_router,
+    internal_context_router,
+)
 from app.routers.v1.chat_history_router import chat_history_router
 
 
@@ -55,6 +59,8 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
 app.include_router(chat_history_router)
+app.include_router(chat_context_router)
+app.include_router(internal_context_router)
 app.include_router(system_router)
 
 

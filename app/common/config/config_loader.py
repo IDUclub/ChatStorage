@@ -169,6 +169,7 @@ def load_config() -> AppConfig:
             mongo_db=os.getenv("MONGO_DB"),
             idu_mcp_url=os.getenv("IDU_MCP_URL"),
             mcp_sources=_get_mcp_sources(),
+            context_internal_api_key=os.getenv("CONTEXT_INTERNAL_API_KEY"),
         )
     except ValueError:
         logger.warning(
@@ -189,6 +190,7 @@ def load_config() -> AppConfig:
                     mongo_db=os.environ.get("MONGO_DB"),
                     idu_mcp_url=os.getenv("IDU_MCP_URL"),
                     mcp_sources=_get_mcp_sources(),
+                    context_internal_api_key=os.getenv("CONTEXT_INTERNAL_API_KEY"),
                 )
             else:
                 logger.warning(
@@ -207,6 +209,7 @@ def load_config() -> AppConfig:
                         mongo_db=os.environ.get("MONGO_DB"),
                         idu_mcp_url=os.getenv("IDU_MCP_URL"),
                         mcp_sources=_get_mcp_sources(),
+                        context_internal_api_key=os.getenv("CONTEXT_INTERNAL_API_KEY"),
                     )
             logger.warning(
                 "No config file found or no new variables where found from: {}".format(
@@ -220,6 +223,7 @@ def load_config() -> AppConfig:
                 mongo_db=os.getenv("MONGO_DB"),
                 idu_mcp_url=os.getenv("IDU_MCP_URL"),
                 mcp_sources=_get_mcp_sources(),
+                context_internal_api_key=os.getenv("CONTEXT_INTERNAL_API_KEY"),
             )
         except ValueError:
             raise

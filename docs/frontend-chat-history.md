@@ -58,7 +58,12 @@ type MessagePartKind =
   | "status"
   | "data"
   | "table"
-  | "file";
+  | "file"
+  | "plan"
+  | "plan_revision"
+  | "artifact_ref"
+  | "validation"
+  | "failure";
 
 type Message = {
   message_id: string;
@@ -253,6 +258,36 @@ Authorization: Bearer <token>
 Ответ: `MessagePart`.
 
 Метод полезен, если UI хранит компактную версию сообщения и хочет дозагрузить тяжелый `data` или `tool_result` part по клику.
+
+## Актуальный контекст диалога
+
+Scenario-data хранит отдельно от сообщений опубликованный сжатый контекст в двух
+представлениях: русский `summary` и структурированный объект с подтверждёнными
+фактами, решениями, маппингами, наборами данных, выполненными задачами и открытыми
+вопросами. Геометрии, полные таблицы, токены и внутренние рассуждения туда не входят.
+
+```http
+GET /api/v1/chat_context/{chat_id}?tail_limit=100
+Authorization: Bearer <token>
+```
+
+Ответ содержит опубликованную `revision`, `content`, `updated_through_seq` и
+необработанный `tail`. Для большого хвоста используются `tail_has_more` и
+`tail_next_after_seq`. После финализации сообщения gMART ставит неблокирующую задачу:
+
+```http
+POST /api/v1/chat_context/{chat_id}/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"target_seq": 42, "model": "gpt-oss-20b", "prompt_version": "scenario-data-v1"}
+```
+
+Внутренние endpoints claim/source/complete/fail доступны только context worker по
+`X-Internal-API-Key`. Worker читает хвост порциями и иерархически сворачивает их в
+один контекст. Публикация защищена CAS по `updated_through_seq`; хранится до десяти
+ревизий не старше семи дней, задача повторяется не более трёх раз. Временный API key
+следует заменить сервисным токеном до production-развёртывания.
 
 ### Выполнить сохраненный tool call
 
