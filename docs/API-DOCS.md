@@ -21,7 +21,8 @@ Authorization: Bearer <access_token>
   is not checked, but a token carrying a user id is still required.
 - `401` is returned when the bearer token is missing or carries no user id.
 
-`/system/*`, `/ping` and `/` are currently **unauthenticated** (admin auth is a TODO).
+`/system/*` requires a verified service token. `/ping` and `/` remain unauthenticated for health
+checks and navigation.
 
 ## Data model
 
@@ -281,7 +282,7 @@ Response `200`: `{ "chat_id": string, "deleted_messages": number }`. `404` if no
 
 ## System endpoints
 
-Prefix: `/system` — operational helpers, currently unauthenticated.
+Prefix: `/system` — operational helpers protected by a verified service token.
 
 | Method & path | Description |
 |---|---|

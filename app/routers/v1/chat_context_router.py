@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, Path, Query, Response, status
 
 from app.depndencies.auth_dependencies import (
     get_current_user_id,
-    verify_context_internal_key,
+    verify_service_token,
 )
 from app.depndencies.dependencies import get_chat_context_service
 from app.schema.chat_context_schema import (
@@ -21,7 +21,7 @@ chat_context_router = APIRouter(prefix="/api/v1/chat_context", tags=["chat_conte
 internal_context_router = APIRouter(
     prefix="/api/v1/internal/chat_context",
     tags=["chat_context_internal"],
-    dependencies=[Depends(verify_context_internal_key)],
+    dependencies=[Depends(verify_service_token)],
 )
 
 

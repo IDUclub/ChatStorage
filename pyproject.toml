@@ -9,6 +9,8 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.141.1",
     "fastmcp>=3.4.5",
+    "httpx>=0.28.1",
+    "idu-service-auth @ https://github.com/IDUclub/idu-service-auth/archive/1b8a418d9b1ab702860eb7289a3b75244666a8d8.tar.gz",
     "loguru>=0.7.3",
     "pymongo>=4.17.0",
     "python-jose[cryptography]>=3.5.0",

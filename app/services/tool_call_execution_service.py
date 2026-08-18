@@ -5,8 +5,10 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from fastmcp import Client
+from idu_service_auth import KeycloakTokenClient
 from pydantic import BaseModel
 
+from app.common.auth.service_auth import ServiceTokenAuth
 from app.dto.message_dto import ToolCallExtractDTO
 from app.schema.chat_history_schema import (
     ToolCallExecutionResultSchema,
@@ -30,6 +32,7 @@ class ToolCallExecutionService:
         idu_mcp_url: str,
         chain_builder: ChatHistoryService,
         mcp_sources: dict[str, str] | None = None,
+        service_auth: KeycloakTokenClient | None = None,
     ) -> None:
         """
         Initialization function for ToolCallExecutor class.
@@ -42,10 +45,13 @@ class ToolCallExecutionService:
         self._idu_mcp_url = idu_mcp_url
         self._mcp_sources = mcp_sources or {}
         self._chain_builder = chain_builder
+        if service_auth is None:
+            raise ValueError("service_auth is required")
+        self._service_auth = service_auth
 
     async def execute_tool_call(
         self,
-        token: str,
+        user_id: str,
         payload: ToolCallExtractDTO,
     ) -> ToolCallExecutionResultSchema:
         """
@@ -79,7 +85,9 @@ class ToolCallExecutionService:
         accumulated_layers: dict[str, dict[str, Any]] = {}
         steps: list[ToolCallResultStepSchema] = []
 
-        async with Client(mcp_url, auth=token) as mcp:
+        async with Client(
+            mcp_url, auth=ServiceTokenAuth(self._service_auth, user_id)
+        ) as mcp:
             for execution_step in chain.execution_chain:
                 tool_call = execution_step.tool_call
                 meta = self._meta_for_tool_call(
@@ -115,7 +123,6 @@ class ToolCallExecutionService:
     async def execute_stored_tool_call(
         self,
         user_id: str,
-        token: str,
         message_id: str,
         part_seq: int,
         tool_call_step: int,
@@ -132,7 +139,7 @@ class ToolCallExecutionService:
             scenario_id=scenario_id,
             project_id=project_id,
         )
-        return await self.execute_tool_call(token, payload)
+        return await self.execute_tool_call(user_id, payload)
 
     @staticmethod
     def to_plain_data(value: Any) -> Any:

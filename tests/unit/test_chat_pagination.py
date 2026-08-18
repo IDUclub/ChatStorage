@@ -55,7 +55,9 @@ class FakeCollection:
                     return False
             return True
 
-        return FakeCursor([document for document in self.documents if matches(document)])
+        return FakeCursor(
+            [document for document in self.documents if matches(document)]
+        )
 
 
 class FakeDatabase:
