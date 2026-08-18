@@ -1,11 +1,8 @@
-from hmac import compare_digest
-
 from fastapi import Depends, Header, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.common.auth.auth_client import AuthenticationClient
-from app.common.config.app_config import AppConfig
-from app.depndencies.dependencies import get_app_configuration, get_auth_client
+from app.depndencies.dependencies import get_auth_client
 
 bearer_scheme = HTTPBearer(auto_error=True)
 
@@ -73,20 +70,15 @@ async def get_current_access_token(
     return token
 
 
-async def verify_context_internal_key(
-    x_internal_api_key: str | None = Header(default=None, alias="X-Internal-API-Key"),
-    config: AppConfig = Depends(get_app_configuration),
+async def verify_service_token(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    auth_client: AuthenticationClient = Depends(get_auth_client),
 ) -> None:
-    """Protect context-worker endpoints without retaining a user JWT."""
+    """Allow internal worker endpoints only to a verified service account."""
 
-    expected = config.CONTEXT_INTERNAL_API_KEY
-    if not expected:
+    payload = await auth_client.process_token(credentials.credentials)
+    if not auth_client.is_service_token(payload):
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Context worker API is disabled",
-        )
-    if not x_internal_api_key or not compare_digest(x_internal_api_key, expected):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid internal API key",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A service token is required",
         )

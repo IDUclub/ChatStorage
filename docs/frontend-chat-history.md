@@ -283,11 +283,10 @@ Content-Type: application/json
 {"target_seq": 42, "model": "gpt-oss-20b", "prompt_version": "scenario-data-v1"}
 ```
 
-Внутренние endpoints claim/source/complete/fail доступны только context worker по
-`X-Internal-API-Key`. Worker читает хвост порциями и иерархически сворачивает их в
-один контекст. Публикация защищена CAS по `updated_through_seq`; хранится до десяти
-ревизий не старше семи дней, задача повторяется не более трёх раз. Временный API key
-следует заменить сервисным токеном до production-развёртывания.
+Внутренние endpoints claim/source/complete/fail доступны только context worker с
+проверенным Keycloak service token. Worker читает хвост порциями и иерархически
+сворачивает их в один контекст. Публикация защищена CAS по `updated_through_seq`;
+хранится до десяти ревизий не старше семи дней, задача повторяется не более трёх раз.
 
 ### Выполнить сохраненный tool call
 

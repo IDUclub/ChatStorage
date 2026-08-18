@@ -134,6 +134,7 @@ class TestResolveMcpUrl:
                 "objects_effects": "http://objects-effects/mcp",
                 "urban_projects": "http://urban/mcp/projects/",
             },
+            service_auth=MagicMock(),
         )
 
     def test_known_source(self) -> None:
@@ -165,10 +166,11 @@ class TestExecuteGuard:
         service = ToolCallExecutionService(
             idu_mcp_url="",
             chain_builder=ChatHistoryService(MagicMock()),
+            service_auth=MagicMock(),
         )
         payload = ToolCallExtractDTO(tool_call=ToolCallDTO(tool_name="GetServices"))
 
         with pytest.raises(HTTPException) as exc_info:
-            await service.execute_tool_call(token="t", payload=payload)
+            await service.execute_tool_call(user_id="u", payload=payload)
 
         assert exc_info.value.status_code == 503
