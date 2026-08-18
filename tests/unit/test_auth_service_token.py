@@ -6,11 +6,14 @@ claims (``jwt.get_unverified_claims``), letting us craft arbitrary payloads.
 """
 
 import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt
 
 from app.common.auth.auth_client import AuthenticationClient
 from app.common.config.auth_config import AuthConfig
 from app.common.exceptions.auth import ServiceTokenUserIdRequiredError
+from app.depndencies.auth_dependencies import verify_service_token
 
 
 def _client() -> AuthenticationClient:
@@ -67,3 +70,29 @@ class TestResolveUserId:
 
         with pytest.raises(ServiceTokenUserIdRequiredError):
             await client.resolve_user_id(token, service_user_id=None)
+
+
+class TestVerifyServiceToken:
+    @pytest.mark.asyncio
+    async def test_service_account_is_allowed_without_user_header(self):
+        token = _token({"preferred_username": "service-account-gmart", "sub": "svc-1"})
+
+        assert (
+            await verify_service_token(
+                HTTPAuthorizationCredentials(scheme="Bearer", credentials=token),
+                _client(),
+            )
+            is None
+        )
+
+    @pytest.mark.asyncio
+    async def test_regular_user_is_rejected(self):
+        token = _token({"preferred_username": "ivan", "sub": "user-42"})
+
+        with pytest.raises(HTTPException) as exc:
+            await verify_service_token(
+                HTTPAuthorizationCredentials(scheme="Bearer", credentials=token),
+                _client(),
+            )
+
+        assert exc.value.status_code == 403

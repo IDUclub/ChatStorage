@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from idu_service_auth import KeycloakTokenClient
+
 from app.common.auth.auth_client import AuthenticationClient
 from app.common.config.app_config import AppConfig
 from app.common.config.auth_config import AuthConfig
@@ -53,6 +55,10 @@ async def get_auth_client() -> AuthenticationClient:
         AuthenticationClient: Auth client for app.
     """
     return app_deps["auth_client"]
+
+
+async def get_service_auth() -> KeycloakTokenClient:
+    return app_deps["service_auth"]
 
 
 async def get_chat_history_service() -> ChatHistoryService:

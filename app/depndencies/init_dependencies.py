@@ -1,4 +1,5 @@
 from app.common.auth.auth_client import AuthenticationClient
+from app.common.auth.service_auth import build_service_auth
 from app.common.config.app_config import AppConfig
 from app.common.config.auth_config import AuthConfig
 from app.common.config.config_loader import load_auth_config, load_config
@@ -15,6 +16,7 @@ def init_dependencies() -> dict:
     init_logger(app_config.PATH_TO_LOG)
     auth_config: AuthConfig = load_auth_config()
     auth_client = AuthenticationClient(auth_config)
+    service_auth = build_service_auth()
     mongo_client = create_mongo_client(app_config)
     mongo_db = get_database(mongo_client, app_config)
     chat_history_service = ChatHistoryService(mongo_db)
@@ -23,11 +25,13 @@ def init_dependencies() -> dict:
         app_config.IDU_MCP_URL,
         chat_history_service,
         mcp_sources=app_config.MCP_SOURCES,
+        service_auth=service_auth,
     )
     return {
         "app_config": app_config,
         "auth_config": auth_config,
         "auth_client": auth_client,
+        "service_auth": service_auth,
         "mongo_client": mongo_client,
         "mongo_db": mongo_db,
         "chat_history_service": chat_history_service,

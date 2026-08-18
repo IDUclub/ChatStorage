@@ -1,9 +1,6 @@
 from fastapi import APIRouter, Body, Depends, Path, Query, status
 
-from app.depndencies.auth_dependencies import (
-    get_current_access_token,
-    get_current_user_id,
-)
+from app.depndencies.auth_dependencies import get_current_user_id
 from app.depndencies.dependencies import (
     get_chat_history_service,
     get_tool_call_execution_service,
@@ -265,7 +262,6 @@ async def execute_tool_call(
     scenario_id: int | None = Query(default=None, examples=[772]),
     project_id: int | None = Query(default=None, examples=[42]),
     user_id: str = Depends(get_current_user_id),
-    token: str = Depends(get_current_access_token),
     service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
 ) -> ToolCallExecutionResultSchema:
     """
@@ -276,7 +272,6 @@ async def execute_tool_call(
 
     return await service.execute_stored_tool_call(
         user_id=user_id,
-        token=token,
         message_id=message_id,
         part_seq=part_seq,
         tool_call_step=tool_call,
