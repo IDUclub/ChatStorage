@@ -97,7 +97,7 @@ class ToolCallExecutionService:
                 )
                 raw_result = await mcp.call_tool(
                     tool_call.tool_name,
-                    tool_call.arguments,
+                    self._arguments_for_tool_call(tool_call, accumulated_layers),
                     meta=meta,
                 )
                 result = self.to_plain_data(getattr(raw_result, "data", raw_result))
@@ -177,7 +177,36 @@ class ToolCallExecutionService:
             return {**base_meta, "objects": accumulated_layers}
         if tool_call.tool_name == "CreateRestrictions":
             return {**base_meta, "layers": accumulated_layers}
+        if tool_call.tool_name in {
+            "CheckDistanceFromSource",
+            "CheckDistanceTable",
+            "CheckPresenceWithin",
+            "CheckZonalAttributeThreshold",
+            "CheckZonalRatio",
+        }:
+            return {**base_meta, "layers": accumulated_layers}
         return base_meta
+
+    @staticmethod
+    def _arguments_for_tool_call(
+        tool_call: ToolCallSchema,
+        accumulated_layers: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Inject replayed data as tool arguments while keeping stored calls compact."""
+
+        arguments = dict(tool_call.arguments)
+        if tool_call.tool_name == "CreateBuffers":
+            arguments["objects"] = accumulated_layers
+        elif tool_call.tool_name in {
+            "CreateRestrictions",
+            "CheckDistanceFromSource",
+            "CheckDistanceTable",
+            "CheckPresenceWithin",
+            "CheckZonalAttributeThreshold",
+            "CheckZonalRatio",
+        }:
+            arguments["layers"] = accumulated_layers
+        return arguments
 
     @staticmethod
     def _result_data(result: Any) -> dict[str, Any]:
