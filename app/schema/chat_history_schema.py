@@ -19,6 +19,10 @@ MessagePartKind = Literal[
     "artifact_ref",
     "validation",
     "failure",
+    "check_plan",
+    "requirement_resolution",
+    "compliance_result",
+    "compliance_summary",
 ]
 
 

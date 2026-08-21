@@ -51,6 +51,55 @@ class TablePartPayload(BaseModel):
     rows: list[dict[str, Any]]
 
 
+class CheckPlanPartPayload(BaseModel):
+    """Versioned executable-norm plan persisted without executable expressions."""
+
+    model_config = ConfigDict(extra="allow")
+
+    schema_version: str = Field(pattern=r"^1\.0$")
+    template: str = Field(min_length=1)
+    template_version: int = Field(ge=1)
+    params: dict[str, Any]
+    source: dict[str, Any]
+    planner_status: str
+
+
+class RequirementResolutionPartPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    restriction_id: str = Field(min_length=1)
+    effective_requirements: dict[str, Any]
+    resolved_requirements: list[dict[str, Any]]
+    missing_requirements: list[str]
+
+
+class ComplianceResultPartPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    restriction_id: str = Field(min_length=1)
+    template: str = Field(min_length=1)
+    template_version: int = Field(ge=1)
+    verification_status: str
+    compliance_status: str
+    coverage: dict[str, Any]
+    summary: dict[str, Any]
+    evidence_schema_version: str = Field(pattern=r"^1\.0$")
+
+
+class ComplianceSummaryPartPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    request_id: str = Field(min_length=1)
+    total_norms: int = Field(ge=0)
+    violated_norms: int = Field(ge=0)
+    passed_norms: int = Field(ge=0)
+    unverifiable_norms: int = Field(ge=0)
+    unsupported_norms: int = Field(ge=0)
+    not_applicable_norms: int = Field(ge=0)
+    partial_norms: int = Field(ge=0)
+    results: list[dict[str, Any]]
+
+
 class MessagePartCreateDTO(BaseModel):
     """Message part payload received from client."""
 
@@ -68,6 +117,14 @@ class MessagePartCreateDTO(BaseModel):
             FilePartPayload.model_validate(self.payload)
         if self.kind == "table":
             TablePartPayload.model_validate(self.payload)
+        if self.kind == "check_plan":
+            CheckPlanPartPayload.model_validate(self.payload)
+        if self.kind == "requirement_resolution":
+            RequirementResolutionPartPayload.model_validate(self.payload)
+        if self.kind == "compliance_result":
+            ComplianceResultPartPayload.model_validate(self.payload)
+        if self.kind == "compliance_summary":
+            ComplianceSummaryPartPayload.model_validate(self.payload)
         return self
 
 

@@ -140,6 +140,10 @@ MESSAGES_VALIDATOR = {
                                 "artifact_ref",
                                 "validation",
                                 "failure",
+                                "check_plan",
+                                "requirement_resolution",
+                                "compliance_result",
+                                "compliance_summary",
                             ]
                         },
                         "payload": {"bsonType": "object"},
@@ -384,6 +388,23 @@ async def _migration_005_context_storage(database: AsyncDatabase) -> None:
     )
 
 
+async def _migration_006_executable_norm_parts(database: AsyncDatabase) -> None:
+    """Allow structured CheckPlan and compliance-result message parts."""
+
+    try:
+        await database.command(
+            {
+                "collMod": "messages",
+                "validator": MESSAGES_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code != _NAMESPACE_NOT_FOUND:
+            raise
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
@@ -391,6 +412,7 @@ MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("003-add-file-part-kind", _migration_003_add_file_part_kind),
     ("004-add-table-part-kind", _migration_004_add_table_part_kind),
     ("005-context-storage", _migration_005_context_storage),
+    ("006-executable-norm-parts", _migration_006_executable_norm_parts),
 ]
 
 

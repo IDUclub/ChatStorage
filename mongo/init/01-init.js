@@ -122,6 +122,8 @@ db.createCollection("messages", {
                 enum: [
                   "text", "tool_call", "tool_result", "status", "data", "table", "file",
                   "plan", "plan_revision", "artifact_ref", "validation", "failure"
+                  , "check_plan", "requirement_resolution", "compliance_result",
+                  "compliance_summary"
                 ]
               },
               payload: {

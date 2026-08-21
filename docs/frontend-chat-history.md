@@ -63,7 +63,11 @@ type MessagePartKind =
   | "plan_revision"
   | "artifact_ref"
   | "validation"
-  | "failure";
+  | "failure"
+  | "check_plan"
+  | "requirement_resolution"
+  | "compliance_result"
+  | "compliance_summary";
 
 type Message = {
   message_id: string;
@@ -85,6 +89,12 @@ type MessagePart = {
 ```
 
 `parts` - основной формат контента сообщения. Простое текстовое сообщение backend тоже возвращает как `parts[0]` с `kind: "text"` и `payload.text`.
+
+Compliance parts валидируются структурно: `check_plan` содержит версию схемы,
+шаблон и источник нормы; `requirement_resolution` — effective/resolved/missing
+requirements; `compliance_result` — раздельные verification/compliance статусы,
+coverage и версии; `compliance_summary` — агрегаты запроса. Не вычисляйте вердикт
+повторно из соседнего текстового part.
 
 ## Endpoints
 
@@ -294,6 +304,12 @@ Content-Type: application/json
 GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?scenario_id=772&project_id=42
 Authorization: Bearer <token>
 ```
+
+Для новых compliance-инструментов сервис сначала повторно получает сохранённые
+исходные слои, затем подставляет их в аргумент `layers` геометрического вызова.
+Сохранённый компактный tool call при этом не изменяется. Выполнение идёт по текущему
+состоянию сценария: это повторный расчёт, а не гарантированное историческое
+воспроизведение без immutable revision или снимка данных.
 
 Path:
 
