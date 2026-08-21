@@ -96,6 +96,27 @@ class TestMetaForToolCall:
 
         assert meta == base
 
+    def test_compliance_tool_gets_layers(self) -> None:
+        layers = {"houses": {"type": "FeatureCollection"}}
+        meta = ToolCallExecutionService._meta_for_tool_call(
+            ToolCallSchema(tool_name="CheckDistanceFromSource"), {}, layers
+        )
+        assert meta == {"layers": layers}
+
+
+class TestArgumentsForToolCall:
+    def test_compliance_replay_injects_layers_without_changing_stored_call(
+        self,
+    ) -> None:
+        layers = {"houses": {"type": "FeatureCollection"}}
+        call = ToolCallSchema(
+            tool_name="CheckDistanceFromSource",
+            arguments={"restriction_id": "r1"},
+        )
+        arguments = ToolCallExecutionService._arguments_for_tool_call(call, layers)
+        assert arguments == {"restriction_id": "r1", "layers": layers}
+        assert call.arguments == {"restriction_id": "r1"}
+
 
 class TestResultData:
     """Result unwrapping into a flat dict."""

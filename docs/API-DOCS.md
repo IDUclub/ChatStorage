@@ -34,7 +34,11 @@ type MessagePartKind =
   | "tool_result"
   | "status"
   | "data"
-  | "file";
+  | "file"
+  | "check_plan"
+  | "requirement_resolution"
+  | "compliance_result"
+  | "compliance_summary";
 
 type MessagePart = {
   part_seq: number;                  // 1-based order inside a message
@@ -78,6 +82,10 @@ type Chat = ChatSummary & { messages: Message[] };
 | `tool_result` | free-form | result of a tool call |
 | `data` | free-form | scenario-specific; **not validated** by the service |
 | `file` | `{ "url": string, "filename"?, "mime_type"?, "size_bytes"?, "source_service"?, … }` | **`url` is required and validated** (`422` otherwise). ChatStorage stores only the reference, never the bytes |
+| `check_plan` | versioned plan + restriction source | executable-norm input validated before storage |
+| `requirement_resolution` | effective/resolved/missing requirements | records the concrete scenario field mapping |
+| `compliance_result` | verification/compliance, coverage, evidence versions | structured result for UI/history |
+| `compliance_summary` | request-level norm counters | structured aggregate, not LLM prose |
 
 > A simple text message sent as `content` is stored and returned as `parts[0]`
 > with `kind: "text"` and `payload.text`.
@@ -217,6 +225,11 @@ Authorization: Bearer <token>
 Rebuilds the dependency chain for the target tool call and executes it (and its
 prerequisites) against the relevant MCP server (IDU MCP by default, or the part's
 `mcp_source`), feeding earlier results forward as MCP `meta`.
+
+For the stable compliance geometry tools, replay also injects layers returned by
+the preceding retrieval calls into the transient `layers` argument. The stored tool
+call remains compact. This is a recalculation against the current scenario, not an
+exact historical replay unless the source data has an immutable revision/snapshot.
 
 Path parameters:
 
