@@ -5,6 +5,7 @@ from app.depndencies.dependencies import (
     get_chat_history_service,
     get_tool_call_execution_service,
 )
+from app.depndencies.space_dependencies import get_current_space
 from app.dto.message_dto import (
     ChatCreateDTO,
     MessageCreateDTO,
@@ -12,6 +13,7 @@ from app.dto.message_dto import (
 from app.schema.chat_history_schema import (
     ChatListSchema,
     ChatSchema,
+    ChatSpace,
     ChatSummarySchema,
     ChatTitleListSchema,
     DeleteChatSchema,
@@ -35,12 +37,13 @@ async def get_user_chats(
     offset: int = Query(default=0, ge=0, examples=[0]),
     scenario_id: str | None = Query(default=None, examples=["772"]),
     project_id: str | None = Query(default=None, examples=["42"]),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatListSchema:
     """
     Example:
-    GET /api/v1/chat_history/chats?limit=20&offset=0&scenario_id=772&project_id=42
+    GET /api/v1/chat_history/chats?space=main&limit=20&offset=0&scenario_id=772&project_id=42
     Authorization: Bearer <token>
     """
 
@@ -50,21 +53,23 @@ async def get_user_chats(
         offset=offset,
         scenario_id=scenario_id,
         project_id=project_id,
+        space=space,
     )
 
 
 @chat_history_router.get("/chats/titles", response_model=ChatTitleListSchema)
 async def get_user_unique_chat_titles(
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatTitleListSchema:
     """
     Example:
-    GET /api/v1/chat_history/chats/titles
+    GET /api/v1/chat_history/chats/titles?space=main
     Authorization: Bearer <token>
     """
 
-    return await service.get_unique_chat_titles(user_id=user_id)
+    return await service.get_unique_chat_titles(user_id=user_id, space=space)
 
 
 @chat_history_router.post(
@@ -79,6 +84,7 @@ async def create_empty_user_chat(
             "create_chat": {
                 "summary": "Create chat",
                 "value": {
+                    "space": "main",
                     "title": "New assistant chat",
                     "scenario_id": "default",
                     "project_id": 42,
@@ -96,7 +102,7 @@ async def create_empty_user_chat(
     Authorization: Bearer <token>
     Content-Type: application/json
 
-    {"title": "New assistant chat", "scenario_id": "default", "metadata": {"source": "web"}}
+    {"space": "main", "title": "New assistant chat", "scenario_id": "default", "metadata": {"source": "web"}}
     """
 
     return await service.create_chat(user_id=user_id, payload=payload)
@@ -112,12 +118,13 @@ async def get_user_chat_by_id(
     ),
     message_limit: int | None = Query(default=None, ge=1, le=100, examples=[40]),
     before_seq: int | None = Query(default=None, ge=1, examples=[121]),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatSchema:
     """
     Example:
-    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479?message_limit=40&before_seq=121
+    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479?space=main&message_limit=40&before_seq=121
     Authorization: Bearer <token>
     """
 
@@ -126,6 +133,7 @@ async def get_user_chat_by_id(
         chat_id=chat_id,
         message_limit=message_limit,
         before_seq=before_seq,
+        space=space,
     )
 
 
@@ -196,19 +204,25 @@ async def post_message(
         max_length=36,
         examples=[CHAT_ID_EXAMPLE],
     ),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> MessageSchema:
     """
     Example:
-    POST /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479/message
+    POST /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479/message?space=main
     Authorization: Bearer <token>
     Content-Type: application/json
 
     {"role": "user", "content": "What can you tell me about this project?", "metadata": {"client_message_id": "local-1"}}
     """
 
-    return await service.add_message(user_id=user_id, chat_id=chat_id, message=message)
+    return await service.add_message(
+        user_id=user_id,
+        chat_id=chat_id,
+        message=message,
+        space=space,
+    )
 
 
 @chat_history_router.get(
@@ -229,12 +243,13 @@ async def get_message_part(
         examples=[MESSAGE_ID_EXAMPLE],
     ),
     part_seq: int = Path(..., ge=1, examples=[1]),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> MessagePartSchema:
     """
     Example:
-    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/1
+    GET /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/1?space=main
     Authorization: Bearer <token>
     """
 
@@ -243,6 +258,7 @@ async def get_message_part(
         chat_id=chat_id,
         message_id=message_id,
         part_seq=part_seq,
+        space=space,
     )
 
 
@@ -261,12 +277,13 @@ async def execute_tool_call(
     tool_call: int = Path(..., ge=1, examples=[1]),
     scenario_id: int | None = Query(default=None, examples=[772]),
     project_id: int | None = Query(default=None, examples=[42]),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ToolCallExecutionService = Depends(get_tool_call_execution_service),
 ) -> ToolCallExecutionResultSchema:
     """
     Example:
-    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?scenario_id=772&project_id=42
+    GET /api/v1/chat_history/messages/8ec7f7b8-ec3f-4bb9-a6c4-89f7a930bda1/parts/7/tool_calls/1/execute?space=main&scenario_id=772&project_id=42
     Authorization: Bearer <token>
     """
 
@@ -277,6 +294,7 @@ async def execute_tool_call(
         tool_call_step=tool_call,
         scenario_id=scenario_id,
         project_id=project_id,
+        space=space,
     )
 
 
@@ -288,13 +306,14 @@ async def delete_chat(
         max_length=36,
         examples=[CHAT_ID_EXAMPLE],
     ),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> DeleteChatSchema:
     """
     Example:
-    DELETE /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479
+    DELETE /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479?space=main
     Authorization: Bearer <token>
     """
 
-    return await service.delete_chat(user_id=user_id, chat_id=chat_id)
+    return await service.delete_chat(user_id=user_id, chat_id=chat_id, space=space)

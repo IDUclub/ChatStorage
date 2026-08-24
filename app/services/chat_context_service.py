@@ -15,6 +15,7 @@ from app.schema.chat_context_schema import (
     ChatContextSchema,
     ContextJobSchema,
 )
+from app.schema.chat_history_schema import DEFAULT_CHAT_SPACE, ChatSpace
 from app.services.chat_history_service import ChatHistoryService
 
 MAX_CONTEXT_ATTEMPTS = 3
@@ -47,10 +48,18 @@ class ChatContextService:
         tail_limit: int = 100,
         target_seq: int | None = None,
         after_seq: int | None = None,
+        space: ChatSpace | None = None,
     ) -> ChatContextSchema:
-        """Return the latest snapshot and a bounded unsummarized message tail."""
+        """Return the latest snapshot and a bounded unsummarized message tail.
 
-        chat = await self._chats.find_one({"user_id": user_id, "chat_id": chat_id})
+        ``space=None`` skips the space check and is used by the internal worker
+        endpoints, which resolve the chat from an already authorized job.
+        """
+
+        query = {"user_id": user_id, "chat_id": chat_id}
+        if space is not None:
+            query["space"] = space
+        chat = await self._chats.find_one(query)
         if not chat:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"
@@ -100,10 +109,13 @@ class ChatContextService:
         target_seq: int | None,
         model: str,
         prompt_version: str,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> ContextJobSchema:
         """Create one idempotent job for a context target revision."""
 
-        chat = await self._chats.find_one({"user_id": user_id, "chat_id": chat_id})
+        chat = await self._chats.find_one(
+            {"user_id": user_id, "chat_id": chat_id, "space": space}
+        )
         if not chat:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"

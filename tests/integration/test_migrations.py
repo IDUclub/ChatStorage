@@ -11,7 +11,12 @@ import pytest
 from pymongo import AsyncMongoClient
 from pymongo.errors import PyMongoError
 
-from app.common.db.migrations import MESSAGES_VALIDATOR, MIGRATIONS, run_migrations
+from app.common.db.migrations import (
+    CHATS_VALIDATOR,
+    MESSAGES_VALIDATOR,
+    MIGRATIONS,
+    run_migrations,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -93,5 +98,54 @@ async def test_migrations_are_idempotent(mongo_client: AsyncMongoClient) -> None
         second = await database["_migrations"].count_documents({})
 
         assert first == second == len(MIGRATIONS)
+    finally:
+        await mongo_client.drop_database(db_name)
+
+
+def _chats_validator_without_space() -> dict:
+    """A pre-migration chats validator that predates the space field."""
+
+    validator = copy.deepcopy(CHATS_VALIDATOR)
+    schema = validator["$jsonSchema"]
+    schema["required"] = [field for field in schema["required"] if field != "space"]
+    schema["properties"].pop("space")
+    return validator
+
+
+def _legacy_chat_document() -> dict:
+    now = datetime.now(UTC)
+    return {
+        "user_id": str(uuid4()),
+        "chat_id": str(uuid4()),
+        "next_seq": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+async def test_migrations_backfill_chat_space(mongo_client: AsyncMongoClient) -> None:
+    """007 moves existing chats into the default space and requires the field."""
+
+    db_name = f"chatstorage_mig_{uuid4().hex}"
+    database = mongo_client[db_name]
+    try:
+        # Simulate an existing deployment whose chats predate spaces.
+        await database.create_collection(
+            "chats",
+            validator=_chats_validator_without_space(),
+            validationAction="error",
+            validationLevel="strict",
+        )
+        legacy = _legacy_chat_document()
+        await database["chats"].insert_one(legacy)
+
+        await run_migrations(database)
+
+        stored = await database["chats"].find_one({"chat_id": legacy["chat_id"]})
+        assert stored["space"] == "main"
+
+        # After migrating, a chat without a space is rejected.
+        with pytest.raises(PyMongoError):
+            await database["chats"].insert_one(_legacy_chat_document())
     finally:
         await mongo_client.drop_database(db_name)

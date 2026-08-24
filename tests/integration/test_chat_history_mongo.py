@@ -254,3 +254,156 @@ async def test_build_tool_call_extract_payload(service: ChatHistoryService) -> N
     assert payload.tool_call.arguments == {"services_names": ["school"]}
     # scenario_id resolved from the chat when not passed explicitly.
     assert payload.scenario_id == 772
+
+
+async def test_chats_are_isolated_per_space(service: ChatHistoryService) -> None:
+    user_id = _user_id()
+    main_chat = await service.create_chat(user_id, ChatCreateDTO(title="Main chat"))
+    synapse_chat = await service.create_chat(
+        user_id, ChatCreateDTO(title="Synapse chat", space="synapse")
+    )
+
+    main = await service.get_chats(user_id)
+    synapse = await service.get_chats(user_id, space="synapse")
+
+    assert [item.chat_id for item in main.items] == [main_chat.chat_id]
+    assert main.items[0].space == "main"
+    assert [item.chat_id for item in synapse.items] == [synapse_chat.chat_id]
+    assert synapse.items[0].space == "synapse"
+
+
+async def test_chat_titles_are_isolated_per_space(service: ChatHistoryService) -> None:
+    user_id = _user_id()
+    await service.create_chat(user_id, ChatCreateDTO(title="Main chat"))
+    await service.create_chat(
+        user_id, ChatCreateDTO(title="Synapse chat", space="synapse")
+    )
+
+    main = await service.get_unique_chat_titles(user_id)
+    synapse = await service.get_unique_chat_titles(user_id, space="synapse")
+
+    assert main.items == ["Main chat"]
+    assert synapse.items == ["Synapse chat"]
+
+
+async def test_chat_reads_from_another_space_raise_404(
+    service: ChatHistoryService,
+) -> None:
+    from fastapi import HTTPException
+
+    user_id = _user_id()
+    chat = await service.create_chat(user_id, ChatCreateDTO(space="synapse"))
+    message = await service.add_message(
+        user_id,
+        chat.chat_id,
+        MessageCreateDTO(role="user", content="hi"),
+        space="synapse",
+    )
+
+    with pytest.raises(HTTPException) as chat_error:
+        await service.get_chat(user_id, chat.chat_id)
+    with pytest.raises(HTTPException) as part_error:
+        await service.get_message_part(
+            user_id, chat.chat_id, message.message_id, part_seq=1
+        )
+
+    assert chat_error.value.status_code == 404
+    assert part_error.value.status_code == 404
+
+
+async def test_chat_writes_from_another_space_raise_404(
+    service: ChatHistoryService,
+) -> None:
+    from fastapi import HTTPException
+
+    user_id = _user_id()
+    chat = await service.create_chat(user_id, ChatCreateDTO(space="synapse"))
+
+    with pytest.raises(HTTPException) as message_error:
+        await service.add_message(
+            user_id, chat.chat_id, MessageCreateDTO(role="user", content="hi")
+        )
+    with pytest.raises(HTTPException) as delete_error:
+        await service.delete_chat(user_id, chat.chat_id)
+
+    assert message_error.value.status_code == 404
+    assert delete_error.value.status_code == 404
+    # The chat survived both rejected calls inside its own space.
+    assert (await service.get_chat(user_id, chat.chat_id, space="synapse")).chat_id
+
+
+async def test_tool_call_payload_rejects_another_space(
+    service: ChatHistoryService,
+) -> None:
+    from fastapi import HTTPException
+
+    user_id = _user_id()
+    chat = await service.create_chat(user_id, ChatCreateDTO(space="synapse"))
+    message = await service.add_message(
+        user_id,
+        chat.chat_id,
+        MessageCreateDTO(
+            role="assistant",
+            parts=[
+                MessagePartCreateDTO(
+                    kind="tool_call",
+                    payload={
+                        "calls": [
+                            {
+                                "step": 1,
+                                "tool_name": "GetServices",
+                                "arguments": {"services_names": ["school"]},
+                            }
+                        ]
+                    },
+                )
+            ],
+        ),
+        space="synapse",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.build_tool_call_extract_payload(
+            user_id=user_id,
+            message_id=message.message_id,
+            part_seq=1,
+            tool_call_step=1,
+        )
+
+    assert exc_info.value.status_code == 404
+    payload = await service.build_tool_call_extract_payload(
+        user_id=user_id,
+        message_id=message.message_id,
+        part_seq=1,
+        tool_call_step=1,
+        space="synapse",
+    )
+    assert payload.tool_call.tool_name == "GetServices"
+
+
+async def test_count_chats_by_space(service: ChatHistoryService) -> None:
+    user_id = _user_id()
+    await service.create_chat(user_id)
+    await service.create_chat(user_id)
+    await service.create_chat(user_id, ChatCreateDTO(space="synapse"))
+
+    assert await service.count_chats_by_space(user_id) == {"main": 2, "synapse": 1}
+
+
+async def test_validator_rejects_unknown_space(mongo_database: AsyncDatabase) -> None:
+    """The chats schema only allows the registered spaces."""
+
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    with pytest.raises(PyMongoError):
+        await mongo_database["chats"].insert_one(
+            {
+                "user_id": _user_id(),
+                "chat_id": str(uuid4()),
+                "space": "matrix",
+                "next_seq": 1,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )

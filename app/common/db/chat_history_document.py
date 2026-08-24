@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, NotRequired, TypedDict
 
-from app.schema.chat_history_schema import MessagePartKind, MessageRole
+from app.schema.chat_history_schema import ChatSpace, MessagePartKind, MessageRole
 
 
 class MessagePartDocument(TypedDict):
@@ -21,6 +21,7 @@ class ChatDocument(TypedDict):
 
     user_id: str
     chat_id: str
+    space: ChatSpace
     next_seq: int
     created_at: datetime
     updated_at: datetime
