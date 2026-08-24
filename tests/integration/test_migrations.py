@@ -149,3 +149,46 @@ async def test_migrations_backfill_chat_space(mongo_client: AsyncMongoClient) ->
             await database["chats"].insert_one(_legacy_chat_document())
     finally:
         await mongo_client.drop_database(db_name)
+
+
+async def test_migrations_backfill_chat_space_on_migrated_deployment(
+    mongo_client: AsyncMongoClient,
+) -> None:
+    """007 works on a deployment that already recorded every earlier migration.
+
+    Regression test for a production startup failure: 001 re-applies the current
+    chats validator, so a database migrating from scratch had `space` allowed
+    before 007 backfilled it. A deployment that had already applied 001..006 kept
+    the pre-space validator, and the backfill died with "Document failed
+    validation (additionalProperties: space)".
+    """
+
+    db_name = f"chatstorage_mig_{uuid4().hex}"
+    database = mongo_client[db_name]
+    try:
+        await database.create_collection(
+            "chats",
+            validator=_chats_validator_without_space(),
+            validationAction="error",
+            validationLevel="strict",
+        )
+        legacy = _legacy_chat_document()
+        await database["chats"].insert_one(legacy)
+
+        # Every migration before the space one is already recorded, so only 007 runs.
+        now = datetime.now(UTC)
+        for migration_id, _ in MIGRATIONS[:-1]:
+            await database["_migrations"].insert_one(
+                {"_id": migration_id, "applied_at": now}
+            )
+
+        await run_migrations(database)
+
+        stored = await database["chats"].find_one({"chat_id": legacy["chat_id"]})
+        assert stored["space"] == "main"
+
+        # The final validator is in place: a chat without a space is rejected.
+        with pytest.raises(PyMongoError):
+            await database["chats"].insert_one(_legacy_chat_document())
+    finally:
+        await mongo_client.drop_database(db_name)

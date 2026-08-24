@@ -13,6 +13,7 @@ When you change a collection validator there, mirror the change here as a new
 migration so existing deployments are updated too.
 """
 
+import copy
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
@@ -87,6 +88,17 @@ CHATS_VALIDATOR = {
     }
 }
 
+
+# Transitional chats validator used in the middle of migration 007: `space` is
+# allowed but not yet required. An existing deployment still runs the pre-space
+# validator (`additionalProperties: false`), which rejects the backfill write, so
+# the field has to be permitted before it can be filled and only then required.
+CHATS_VALIDATOR_SPACE_OPTIONAL = copy.deepcopy(CHATS_VALIDATOR)
+CHATS_VALIDATOR_SPACE_OPTIONAL["$jsonSchema"]["required"] = [
+    field
+    for field in CHATS_VALIDATOR_SPACE_OPTIONAL["$jsonSchema"]["required"]
+    if field != "space"
+]
 
 # messages validator, kept in sync with mongo/init/01-init.js.
 MESSAGES_VALIDATOR = {
@@ -418,19 +430,21 @@ async def _migration_006_executable_norm_parts(database: AsyncDatabase) -> None:
             raise
 
 
-async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
-    """Assign every existing chat to the default space and require the field."""
-
-    await database["chats"].update_many(
-        {"space": {"$exists": False}},
-        {"$set": {"space": "main"}},
-    )
+async def _collmod_chats(database: AsyncDatabase, validator: dict) -> bool:
+    """
+    Apply a validator to the chats collection.
+    Args:
+        database (AsyncDatabase): Database to migrate.
+        validator (dict): Validator to install.
+    Returns:
+        bool: False when the collection does not exist yet, True otherwise.
+    """
 
     try:
         await database.command(
             {
                 "collMod": "chats",
-                "validator": CHATS_VALIDATOR,
+                "validator": validator,
                 "validationAction": "error",
                 "validationLevel": "strict",
             }
@@ -438,10 +452,33 @@ async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
     except OperationFailure as exc:
         if exc.code != _NAMESPACE_NOT_FOUND:
             raise
+        return False
+    return True
+
+
+async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
+    """Assign every existing chat to the default space and require the field.
+
+    Runs in two phases on purpose. An existing deployment still has the
+    pre-space chats validator installed (migration 001 only re-applies the
+    validator on databases that never ran it), and `validationLevel: strict`
+    validates updates to existing documents too — so writing `space` before the
+    validator allows it fails with "Document failed validation
+    (additionalProperties: space)" and takes application startup down with it.
+    """
+
+    if not await _collmod_chats(database, CHATS_VALIDATOR_SPACE_OPTIONAL):
         # Fresh database: chats is created by 01-init.js with the current schema.
         logger.info(
             "Migration 007: chats collection does not exist yet, skipping collMod"
         )
+
+    await database["chats"].update_many(
+        {"space": {"$exists": False}},
+        {"$set": {"space": "main"}},
+    )
+
+    await _collmod_chats(database, CHATS_VALIDATOR)
 
     await database["chats"].create_index(
         [("user_id", ASCENDING), ("space", ASCENDING), ("updated_at", DESCENDING)]
