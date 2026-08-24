@@ -1,6 +1,6 @@
 [project]
 name = "chatstorage"
-version = "0.2.0"
+version = "0.3.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
@@ -22,10 +22,22 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "commitizen>=4.16.4",
     "pre-commit>=4.6.0",
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
 ]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+version_scheme = "pep440"
+tag_format = "v$version"
+version_files = [
+    "app/__version__.py:APP_VERSION",
+]
+update_changelog_on_bump = true
+major_version_zero = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
