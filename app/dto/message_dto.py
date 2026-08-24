@@ -4,7 +4,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schema.chat_history_schema import MessagePartKind, MessageRole
+from app.schema.chat_history_schema import (
+    DEFAULT_CHAT_SPACE,
+    ChatSpace,
+    MessagePartKind,
+    MessageRole,
+)
 
 
 class FilePartPayload(BaseModel):
@@ -148,6 +153,7 @@ class MessageCreateDTO(BaseModel):
 class ChatCreateDTO(BaseModel):
     """Chat creation payload."""
 
+    space: ChatSpace = DEFAULT_CHAT_SPACE
     title: str | None = Field(default=None, max_length=256)
     scenario_id: str | int | None = None
     project_id: str | int | None = None

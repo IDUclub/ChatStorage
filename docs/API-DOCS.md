@@ -28,6 +28,7 @@ checks and navigation.
 
 ```ts
 type MessageRole = "user" | "assistant" | "system" | "tool";
+type ChatSpace = "main" | "synapse";
 type MessagePartKind =
   | "text"
   | "tool_call"
@@ -61,6 +62,7 @@ type Message = {
 
 type ChatSummary = {
   chat_id: string;
+  space: ChatSpace;
   title: string | null;
   scenario_id: string | number | null;
   project_id: string | number | null;
@@ -92,6 +94,45 @@ type Chat = ChatSummary & { messages: Message[] };
 
 ---
 
+## Spaces
+
+Every chat belongs to one **space** — the provider environment it was created in.
+The space is a mandatory filter on all chat-history and chat-context endpoints: a
+chat created in one space is invisible from another (a request by its `chat_id`
+returns `404`).
+
+| slug | Title | Notes |
+|---|---|---|
+| `main` | Помощник Проектировщика | Default space; holds every chat created before spaces existed |
+| `synapse` | Synapse | Synapse chats |
+
+Pass the space as the `space` query parameter (or the `space` body field when
+creating a chat). Omit it and `main` is used; an unknown value is a `422`.
+
+### List spaces
+
+```http
+GET /api/v1/spaces
+Authorization: Bearer <token>
+```
+
+Response `200`:
+
+```ts
+type SpaceList = {
+  items: Array<{
+    slug: ChatSpace;
+    title: string;
+    description: string;
+    is_default: boolean;
+    chat_count: number;      // this user's chats in that space
+  }>;
+  default_space: ChatSpace;
+};
+```
+
+---
+
 ## Chat history endpoints
 
 Prefix: `/api/v1/chat_history`
@@ -99,7 +140,7 @@ Prefix: `/api/v1/chat_history`
 ### List chats
 
 ```http
-GET /api/v1/chat_history/chats?limit=50&offset=0&scenario_id=772&project_id=42
+GET /api/v1/chat_history/chats?space=main&limit=50&offset=0&scenario_id=772&project_id=42
 Authorization: Bearer <token>
 ```
 
@@ -107,6 +148,7 @@ Query parameters:
 
 | name | type | default | notes |
 |---|---|---|---|
+| `space` | string | `main` | `main` or `synapse`; only chats of that space are returned |
 | `limit` | int | `50` | `1`–`100` |
 | `offset` | int | `0` | `≥ 0` |
 | `scenario_id` | string | — | optional; matches both string and int storage (`772` ↔ `"772"`) |
@@ -121,11 +163,12 @@ Sorted by `updated_at` descending. Response `200`:
 ### List unique chat titles
 
 ```http
-GET /api/v1/chat_history/chats/titles
+GET /api/v1/chat_history/chats/titles?space=main
 Authorization: Bearer <token>
 ```
 
-Response `200`: `{ "items": string[] }` — non-empty unique titles, alphabetically sorted.
+Response `200`: `{ "items": string[] }` — non-empty unique titles of that space,
+alphabetically sorted.
 
 ### Create chat
 
@@ -139,6 +182,7 @@ Body (optional):
 
 ```json
 {
+  "space": "main",
   "title": "New assistant chat",
   "scenario_id": "default",
   "project_id": 42,
@@ -146,16 +190,18 @@ Body (optional):
 }
 ```
 
-Response `201`: `ChatSummary`. `409` on a rare id collision (retry).
+`space` defaults to `main`. Response `201`: `ChatSummary`. `409` on a rare id
+collision (retry).
 
 ### Get chat with messages
 
 ```http
-GET /api/v1/chat_history/{chat_id}
+GET /api/v1/chat_history/{chat_id}?space=main
 Authorization: Bearer <token>
 ```
 
-Response `200`: `Chat` (messages ordered by `seq` ascending; no pagination). `404` if not found for this user.
+Response `200`: `Chat` (messages ordered by `seq` ascending; no pagination). `404`
+if not found for this user in that space.
 
 ### Add message
 
@@ -208,7 +254,7 @@ collision, retry), `422` (neither `content` nor `parts`, or a `file` part withou
 ### Get one message part
 
 ```http
-GET /api/v1/chat_history/{chat_id}/messages/{message_id}/parts/{part_seq}
+GET /api/v1/chat_history/{chat_id}/messages/{message_id}/parts/{part_seq}?space=main
 Authorization: Bearer <token>
 ```
 
@@ -218,7 +264,7 @@ loading a heavy `data`/`tool_result`/`file` part by click.
 ### Execute a stored tool call
 
 ```http
-GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?scenario_id=772&project_id=42
+GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?space=main&scenario_id=772&project_id=42
 Authorization: Bearer <token>
 ```
 
@@ -239,8 +285,9 @@ Path parameters:
 | `part_seq` | part number inside the message |
 | `tool_call` | 1-based index of the call inside the part |
 
-Query: `scenario_id`, `project_id` — optional; fall back to `message.metadata`,
-then to the chat.
+Query: `space` — the space of the chat the message belongs to (default `main`;
+`404` on a mismatch). `scenario_id`, `project_id` — optional; fall back to
+`message.metadata`, then to the chat.
 
 Expected `tool_call` part payload:
 
@@ -285,7 +332,7 @@ dependencies — body includes `missing_dependencies` and `execution_chain`),
 ### Delete chat
 
 ```http
-DELETE /api/v1/chat_history/{chat_id}
+DELETE /api/v1/chat_history/{chat_id}?space=main
 Authorization: Bearer <token>
 ```
 
@@ -330,7 +377,8 @@ Unhandled errors (via `ExceptionHandlerMiddleware`):
 { "message": "Internal server error", "error_type": "RuntimeError", "detail": "…" }
 ```
 
-Common status codes: `401` (no/invalid token), `404` (not found for this user),
+Common status codes: `401` (no/invalid token), `404` (not found for this user in
+the requested space),
 `409` (id/sequence collision — retry), `422` (invalid body/query or missing tool-call
 dependencies), `500` (internal), `503` (MCP URL not configured).
 

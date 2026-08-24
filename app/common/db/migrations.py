@@ -30,10 +30,19 @@ UUID_PATTERN = (
     "-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 )
 
+CHAT_SPACE_ENUM = ["main", "synapse"]
+
 CHATS_VALIDATOR = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["user_id", "chat_id", "next_seq", "created_at", "updated_at"],
+        "required": [
+            "user_id",
+            "chat_id",
+            "space",
+            "next_seq",
+            "created_at",
+            "updated_at",
+        ],
         "additionalProperties": False,
         "properties": {
             "_id": {},
@@ -46,6 +55,10 @@ CHATS_VALIDATOR = {
                 "bsonType": "string",
                 "pattern": UUID_PATTERN,
                 "description": "Required service-generated chat UUID",
+            },
+            "space": {
+                "enum": CHAT_SPACE_ENUM,
+                "description": "Required chat space (provider environment)",
             },
             "scenario_id": {
                 "bsonType": ["string", "int", "null"],
@@ -405,6 +418,52 @@ async def _migration_006_executable_norm_parts(database: AsyncDatabase) -> None:
             raise
 
 
+async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
+    """Assign every existing chat to the default space and require the field."""
+
+    await database["chats"].update_many(
+        {"space": {"$exists": False}},
+        {"$set": {"space": "main"}},
+    )
+
+    try:
+        await database.command(
+            {
+                "collMod": "chats",
+                "validator": CHATS_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code != _NAMESPACE_NOT_FOUND:
+            raise
+        # Fresh database: chats is created by 01-init.js with the current schema.
+        logger.info(
+            "Migration 007: chats collection does not exist yet, skipping collMod"
+        )
+
+    await database["chats"].create_index(
+        [("user_id", ASCENDING), ("space", ASCENDING), ("updated_at", DESCENDING)]
+    )
+    await database["chats"].create_index(
+        [
+            ("user_id", ASCENDING),
+            ("space", ASCENDING),
+            ("scenario_id", ASCENDING),
+            ("updated_at", DESCENDING),
+        ]
+    )
+    await database["chats"].create_index(
+        [
+            ("user_id", ASCENDING),
+            ("space", ASCENDING),
+            ("project_id", ASCENDING),
+            ("updated_at", DESCENDING),
+        ]
+    )
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
@@ -413,6 +472,7 @@ MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("004-add-table-part-kind", _migration_004_add_table_part_kind),
     ("005-context-storage", _migration_005_context_storage),
     ("006-executable-norm-parts", _migration_006_executable_norm_parts),
+    ("007-add-chat-space", _migration_007_add_chat_space),
 ]
 
 

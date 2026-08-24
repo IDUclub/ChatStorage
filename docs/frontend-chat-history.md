@@ -13,11 +13,77 @@
   `X-User-Id: <user_id>` — под этим пользователем будет вестись чтение/запись истории.
   Для обычных пользовательских токенов заголовок `X-User-Id` игнорируется (используется
   subject токена), что не даёт одному пользователю действовать от имени другого.
+- Все методы истории работают внутри **одного пространства** (`space`). Если параметр не передан,
+  используется пространство по умолчанию `main` — см. раздел «Пространства».
 - Все даты приходят в ISO-формате `datetime` с timezone.
 - `chat_id` и `message_id` - UUID-строки длиной 36 символов.
 - Чаты в списке отсортированы backend по `updated_at` от новых к старым.
 - Сообщения внутри чата отсортированы backend по `seq` от старых к новым.
 - CORS включен для всех origins, credentials не используются.
+
+## Пространства
+
+Чаты каждого пользователя разделены на независимые **пространства** (`space`). Пространство —
+обязательный фильтр всех методов истории: чат, созданный в одном пространстве, не виден из
+другого (запрос по его `chat_id` вернёт `404`).
+
+| slug | Название | Примечание |
+|---|---|---|
+| `main` | Помощник Проектировщика | Пространство по умолчанию; в нём находятся все чаты, созданные до появления пространств |
+| `synapse` | Synapse | Пространство чатов Synapse |
+
+- Пространство передаётся query-параметром `space` во всех методах истории и контекста,
+  и полем `space` в body при создании чата.
+- Параметр необязателен: без него используется `main`.
+- Неизвестное значение — ошибка `422`.
+- `ChatSummary` и `Chat` всегда содержат поле `space`.
+
+### Получить список пространств
+
+```http
+GET /api/v1/spaces
+Authorization: Bearer <token>
+```
+
+Ответ:
+
+```ts
+type SpaceListResponse = {
+  items: Array<{
+    slug: "main" | "synapse";
+    title: string;
+    description: string;
+    is_default: boolean;
+    chat_count: number;
+  }>;
+  default_space: "main" | "synapse";
+};
+```
+
+```json
+{
+  "items": [
+    {
+      "slug": "main",
+      "title": "Помощник Проектировщика",
+      "description": "Основное пространство помощника проектировщика.",
+      "is_default": true,
+      "chat_count": 12
+    },
+    {
+      "slug": "synapse",
+      "title": "Synapse",
+      "description": "Пространство чатов Synapse.",
+      "is_default": false,
+      "chat_count": 3
+    }
+  ],
+  "default_space": "main"
+}
+```
+
+Метод возвращает названия для переключателя пространств и число чатов пользователя в каждом
+из них, чтобы фронту не приходилось хардкодить список.
 
 ## Модель данных
 
@@ -26,6 +92,7 @@
 ```ts
 type ChatSummary = {
   chat_id: string;
+  space: "main" | "synapse";
   title: string | null;
   scenario_id: string | number | null;
   project_id: string | number | null;
@@ -101,18 +168,20 @@ coverage и версии; `compliance_summary` — агрегаты запрос
 ### Получить список чатов
 
 ```http
-GET /api/v1/chat_history/chats?limit=50&offset=0
+GET /api/v1/chat_history/chats?space=main&limit=50&offset=0
 Authorization: Bearer <token>
 ```
 
 Query:
 
+- `space` - пространство чатов, по умолчанию `main`.
 - `limit` - от `1` до `100`, по умолчанию `50`.
 - `offset` - от `0`, по умолчанию `0`.
 - `scenario_id` - необязательный фильтр по сценарию. Совпадает и со строковым, и с числовым значением (`772` найдёт чаты, где сохранено как `"772"` или `772`).
 - `project_id` - необязательный фильтр по проекту, по той же логике совпадения.
 
 Фильтры можно комбинировать. Чаты всегда отсортированы по `updated_at` от новых к старым, независимо от фильтров.
+Возвращаются только чаты запрошенного пространства.
 
 Ответ:
 
@@ -131,6 +200,7 @@ type ChatListResponse = {
   "items": [
     {
       "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "space": "main",
       "title": "New assistant chat",
       "scenario_id": "default",
       "project_id": 42,
@@ -149,7 +219,7 @@ type ChatListResponse = {
 ### Получить уникальные названия чатов
 
 ```http
-GET /api/v1/chat_history/chats/titles
+GET /api/v1/chat_history/chats/titles?space=main
 Authorization: Bearer <token>
 ```
 
@@ -161,7 +231,7 @@ type ChatTitleListResponse = {
 };
 ```
 
-Метод полезен для автодополнения или фильтров по уже использованным названиям. Backend возвращает только непустые уникальные `title`, отсортированные по алфавиту.
+Метод полезен для автодополнения или фильтров по уже использованным названиям. Backend возвращает только непустые уникальные `title` запрошенного пространства, отсортированные по алфавиту.
 
 ### Создать пустой чат
 
@@ -171,10 +241,11 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-Body необязателен. Если данных нет, чат будет создан с пустыми `title`, `scenario_id`, `project_id` и `metadata`.
+Body необязателен. Если данных нет, чат будет создан в пространстве `main` с пустыми `title`, `scenario_id`, `project_id` и `metadata`.
 
 ```ts
 type CreateChatRequest = {
+  space?: "main" | "synapse";
   title?: string | null;
   scenario_id?: string | number | null;
   project_id?: string | number | null;
@@ -188,6 +259,7 @@ type CreateChatRequest = {
 
 ```json
 {
+  "space": "main",
   "title": "New assistant chat",
   "scenario_id": "default",
   "project_id": 42,
@@ -204,11 +276,12 @@ type CreateChatRequest = {
 ### Получить чат с сообщениями
 
 ```http
-GET /api/v1/chat_history/{chat_id}
+GET /api/v1/chat_history/{chat_id}?space=main
 Authorization: Bearer <token>
 ```
 
-Без query-параметров endpoint сохраняет прежнее поведение и возвращает все сообщения.
+Без query-параметров endpoint сохраняет прежнее поведение и возвращает все сообщения
+чата из пространства `main`.
 Для больших диалогов используйте обратную пагинацию:
 
 ```http
@@ -216,6 +289,7 @@ GET /api/v1/chat_history/{chat_id}?message_limit=40
 GET /api/v1/chat_history/{chat_id}?message_limit=40&before_seq=121
 ```
 
+- `space` — пространство чата, по умолчанию `main`. Чат из другого пространства вернёт `404`.
 - `message_limit` — размер страницы от `1` до `100`. Первая страница содержит последние сообщения.
 - `before_seq` — вернуть сообщения с `seq` меньше указанного значения.
 - Сообщения в каждой странице всегда отсортированы по `seq` от старых к новым.
@@ -228,6 +302,7 @@ GET /api/v1/chat_history/{chat_id}?message_limit=40&before_seq=121
 ```json
 {
   "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "space": "main",
   "title": "New assistant chat",
   "scenario_id": "default",
   "project_id": 42,
@@ -261,7 +336,7 @@ GET /api/v1/chat_history/{chat_id}?message_limit=40&before_seq=121
 ### Получить отдельную часть сообщения
 
 ```http
-GET /api/v1/chat_history/{chat_id}/messages/{message_id}/parts/{part_seq}
+GET /api/v1/chat_history/{chat_id}/messages/{message_id}/parts/{part_seq}?space=main
 Authorization: Bearer <token>
 ```
 
@@ -277,7 +352,7 @@ Scenario-data хранит отдельно от сообщений опубли
 вопросами. Геометрии, полные таблицы, токены и внутренние рассуждения туда не входят.
 
 ```http
-GET /api/v1/chat_context/{chat_id}?tail_limit=100
+GET /api/v1/chat_context/{chat_id}?space=main&tail_limit=100
 Authorization: Bearer <token>
 ```
 
@@ -286,7 +361,7 @@ Authorization: Bearer <token>
 `tail_next_after_seq`. После финализации сообщения gMART ставит неблокирующую задачу:
 
 ```http
-POST /api/v1/chat_context/{chat_id}/jobs
+POST /api/v1/chat_context/{chat_id}/jobs?space=main
 Authorization: Bearer <token>
 Content-Type: application/json
 
@@ -301,7 +376,7 @@ Content-Type: application/json
 ### Выполнить сохраненный tool call
 
 ```http
-GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?scenario_id=772&project_id=42
+GET /api/v1/chat_history/messages/{message_id}/parts/{part_seq}/tool_calls/{tool_call}/execute?space=main&scenario_id=772&project_id=42
 Authorization: Bearer <token>
 ```
 
@@ -316,6 +391,9 @@ Path:
 - `message_id` - id сообщения, где лежит part с tool calls.
 - `part_seq` - номер part внутри сообщения.
 - `tool_call` - порядковый номер tool call внутри part, начиная с `1`.
+
+Query `space` (по умолчанию `main`) должен совпадать с пространством чата, которому
+принадлежит сообщение — иначе `404`.
 
 Источник вызова берётся из `part.mcp_source`. ChatStorage понимает как короткие ключи,
 так и сохраняемые gMART обозначения (`IDU_MCP_URL`, `OBJECTS_EFFECTS_MCP_URL`,
@@ -520,16 +598,19 @@ type FilePartPayload = {
 
 ### Открытие страницы чата
 
-1. Загрузить список чатов: `GET /chats?limit=50&offset=0`.
-2. Если в URL есть `chat_id`, загрузить полный чат: `GET /{chat_id}`.
-3. Если `chat_id` нет, показать пустой composer без создания чата.
-4. Создавать чат только перед первым сохраненным сообщением.
+1. Загрузить пространства: `GET /api/v1/spaces` и выбрать активное (по умолчанию `default_space`).
+2. Загрузить список чатов активного пространства: `GET /chats?space=<space>&limit=50&offset=0`.
+3. Если в URL есть `chat_id`, загрузить полный чат: `GET /{chat_id}?space=<space>`.
+4. Если `chat_id` нет, показать пустой composer без создания чата.
+5. Создавать чат только перед первым сохраненным сообщением.
+6. При переключении пространства сбросить текущий диалог и перезагрузить список чатов —
+   `chat_id` из другого пространства недоступен.
 
 ### Отправка первого сообщения
 
-1. Если `chat_id` еще нет, вызвать `POST /create_chat`.
+1. Если `chat_id` еще нет, вызвать `POST /create_chat` с `space` активного пространства.
 2. Оптимистично добавить сообщение пользователя в UI с локальным `client_message_id`.
-3. Вызвать `POST /{chat_id}/message`.
+3. Вызвать `POST /{chat_id}/message?space=<space>`.
 4. Заменить локальное сообщение серверным `Message`.
 5. Обновить sidebar: новый чат поставить вверх или перезагрузить первую страницу списка.
 
@@ -547,9 +628,9 @@ type FilePartPayload = {
 
 - `400` - сервисный токен передан без заголовка `X-User-Id`.
 - `401` - нет Bearer-токена или токен не содержит user id.
-- `404` - чат, сообщение или part не найден для текущего пользователя.
+- `404` - чат, сообщение или part не найден для текущего пользователя в запрошенном пространстве.
 - `409` - редкая коллизия id/sequence; можно повторить запрос.
-- `422` - невалидный body/query/path или не хватает зависимостей для tool call.
+- `422` - невалидный body/query/path (в том числе неизвестный `space`) или не хватает зависимостей для tool call.
 - `500` - внутренняя ошибка сервиса.
 - `503` - `IDU_MCP_URL` не настроен при выполнении tool call.
 
@@ -610,13 +691,21 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
+type Space = "main" | "synapse";
+
+export function getSpaces(token: string) {
+  return request<SpaceListResponse>("/api/v1/spaces", token);
+}
+
 export function getChats(
   token: string,
+  space: Space = "main",
   limit = 50,
   offset = 0,
   filters: { scenario_id?: string | number; project_id?: string | number } = {},
 ) {
   const params = new URLSearchParams({
+    space,
     limit: String(limit),
     offset: String(offset),
   });
@@ -638,24 +727,29 @@ export function createChat(token: string, body: CreateChatRequest = {}) {
   });
 }
 
-export function getChat(token: string, chatId: string) {
-  return request<Chat>(`/api/v1/chat_history/${chatId}`, token);
+export function getChat(token: string, chatId: string, space: Space = "main") {
+  return request<Chat>(`/api/v1/chat_history/${chatId}?space=${space}`, token);
 }
 
 export function addMessage(
   token: string,
   chatId: string,
   body: CreateMessageRequest,
+  space: Space = "main",
 ) {
-  return request<Message>(`/api/v1/chat_history/${chatId}/message`, token, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return request<Message>(
+    `/api/v1/chat_history/${chatId}/message?space=${space}`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
-export function deleteChat(token: string, chatId: string) {
+export function deleteChat(token: string, chatId: string, space: Space = "main") {
   return request<{ chat_id: string; deleted_messages: number }>(
-    `/api/v1/chat_history/${chatId}`,
+    `/api/v1/chat_history/${chatId}?space=${space}`,
     token,
     { method: "DELETE" },
   );
@@ -665,7 +759,7 @@ export function deleteChat(token: string, chatId: string) {
 ## Удаление чата
 
 ```http
-DELETE /api/v1/chat_history/{chat_id}
+DELETE /api/v1/chat_history/{chat_id}?space=main
 Authorization: Bearer <token>
 ```
 

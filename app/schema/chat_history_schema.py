@@ -6,6 +6,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 MessageRole = Literal["user", "assistant", "system", "tool"]
+ChatSpace = Literal["main", "synapse"]
+DEFAULT_CHAT_SPACE: ChatSpace = "main"
+
 MessagePartKind = Literal[
     "text",
     "tool_call",
@@ -53,6 +56,7 @@ class ChatSummarySchema(BaseModel):
     """Chat summary returned in chat lists."""
 
     chat_id: str
+    space: ChatSpace = DEFAULT_CHAT_SPACE
     title: str | None = None
     scenario_id: str | int | None = None
     project_id: str | int | None = None

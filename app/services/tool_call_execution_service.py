@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from app.common.auth.service_auth import ServiceTokenAuth
 from app.dto.message_dto import ToolCallExtractDTO
 from app.schema.chat_history_schema import (
+    DEFAULT_CHAT_SPACE,
+    ChatSpace,
     ToolCallExecutionResultSchema,
     ToolCallResultStepSchema,
     ToolCallSchema,
@@ -128,6 +130,7 @@ class ToolCallExecutionService:
         tool_call_step: int,
         scenario_id: int | None = None,
         project_id: int | None = None,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> ToolCallExecutionResultSchema:
         """Execute a tool call restored from chat history."""
 
@@ -138,6 +141,7 @@ class ToolCallExecutionService:
             tool_call_step=tool_call_step,
             scenario_id=scenario_id,
             project_id=project_id,
+            space=space,
         )
         return await self.execute_tool_call(user_id, payload)
 

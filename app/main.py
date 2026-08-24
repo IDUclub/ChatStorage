@@ -23,6 +23,7 @@ from app.routers.v1.chat_context_router import (
     internal_context_router,
 )
 from app.routers.v1.chat_history_router import chat_history_router
+from app.routers.v1.space_router import space_router
 
 
 @asynccontextmanager
@@ -64,6 +65,7 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
 app.include_router(chat_history_router)
+app.include_router(space_router)
 app.include_router(chat_context_router)
 app.include_router(internal_context_router)
 app.include_router(system_router, dependencies=[Depends(verify_service_token)])

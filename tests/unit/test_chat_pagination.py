@@ -77,6 +77,7 @@ async def test_get_chat_returns_latest_page_and_backwards_cursor() -> None:
     chat = {
         "user_id": "user",
         "chat_id": "chat",
+        "space": "main",
         "title": "Paged",
         "metadata": {},
         "created_at": now,

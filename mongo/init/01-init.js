@@ -8,13 +8,15 @@ if (!db.getUser("mongo")) {
   });
 }
 
+const chatSpaces = ["main", "synapse"];
+
 const uuidPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
 db.createCollection("chats", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
-      required: ["user_id", "chat_id", "next_seq", "created_at", "updated_at"],
+      required: ["user_id", "chat_id", "space", "next_seq", "created_at", "updated_at"],
       additionalProperties: false,
       properties: {
         _id: {},
@@ -27,6 +29,10 @@ db.createCollection("chats", {
           bsonType: "string",
           pattern: uuidPattern,
           description: "Required service-generated chat UUID"
+        },
+        space: {
+          enum: chatSpaces,
+          description: "Required chat space (provider environment)"
         },
         scenario_id: {
           bsonType: ["string", "int", "null"],
@@ -162,6 +168,9 @@ db.chats.createIndex({ user_id: 1, updated_at: -1 });
 db.chats.createIndex({ user_id: 1, chat_id: 1 }, { unique: true });
 db.chats.createIndex({ user_id: 1, scenario_id: 1, updated_at: -1 });
 db.chats.createIndex({ user_id: 1, project_id: 1, updated_at: -1 });
+db.chats.createIndex({ user_id: 1, space: 1, updated_at: -1 });
+db.chats.createIndex({ user_id: 1, space: 1, scenario_id: 1, updated_at: -1 });
+db.chats.createIndex({ user_id: 1, space: 1, project_id: 1, updated_at: -1 });
 
 db.messages.createIndex({ user_id: 1, chat_id: 1, seq: 1 }, { unique: true });
 db.messages.createIndex({ user_id: 1, chat_id: 1, message_id: 1 }, { unique: true });

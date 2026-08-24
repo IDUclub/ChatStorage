@@ -7,6 +7,7 @@ from app.depndencies.auth_dependencies import (
     verify_service_token,
 )
 from app.depndencies.dependencies import get_chat_context_service
+from app.depndencies.space_dependencies import get_current_space
 from app.schema.chat_context_schema import (
     ChatContextSchema,
     ContextJobClaimSchema,
@@ -15,6 +16,7 @@ from app.schema.chat_context_schema import (
     ContextJobFailureSchema,
     ContextJobSchema,
 )
+from app.schema.chat_history_schema import ChatSpace
 from app.services.chat_context_service import ChatContextService
 
 chat_context_router = APIRouter(prefix="/api/v1/chat_context", tags=["chat_context"])
@@ -29,10 +31,13 @@ internal_context_router = APIRouter(
 async def get_chat_context(
     chat_id: str = Path(..., min_length=36, max_length=36),
     tail_limit: int = Query(default=100, ge=1, le=200),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatContextService = Depends(get_chat_context_service),
 ) -> ChatContextSchema:
-    return await service.get_context(user_id, chat_id, tail_limit=tail_limit)
+    return await service.get_context(
+        user_id, chat_id, tail_limit=tail_limit, space=space
+    )
 
 
 @chat_context_router.post(
@@ -43,6 +48,7 @@ async def get_chat_context(
 async def enqueue_chat_context(
     payload: ContextJobCreateSchema = Body(default_factory=ContextJobCreateSchema),
     chat_id: str = Path(..., min_length=36, max_length=36),
+    space: ChatSpace = Depends(get_current_space),
     user_id: str = Depends(get_current_user_id),
     service: ChatContextService = Depends(get_chat_context_service),
 ) -> ContextJobSchema:
@@ -52,6 +58,7 @@ async def enqueue_chat_context(
         target_seq=payload.target_seq,
         model=payload.model,
         prompt_version=payload.prompt_version,
+        space=space,
     )
 
 

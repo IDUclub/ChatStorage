@@ -21,8 +21,10 @@ from app.dto.message_dto import (
     ToolCallExtractDTO,
 )
 from app.schema.chat_history_schema import (
+    DEFAULT_CHAT_SPACE,
     ChatListSchema,
     ChatSchema,
+    ChatSpace,
     ChatSummarySchema,
     ChatTitleListSchema,
     DeleteChatSchema,
@@ -61,6 +63,7 @@ class ChatHistoryService:
         document: ChatDocument = {
             "user_id": user_id,
             "chat_id": str(uuid4()),
+            "space": payload.space,
             "title": payload.title,
             "scenario_id": payload.scenario_id,
             "project_id": payload.project_id,
@@ -87,12 +90,13 @@ class ChatHistoryService:
         user_id: str,
         chat_id: str,
         message: MessageCreateDTO,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> MessageSchema:
-        """Add message to a user chat."""
+        """Add message to a user chat inside one space."""
 
         now = self._now()
         chat = await self._chats.find_one_and_update(
-            {"user_id": user_id, "chat_id": chat_id},
+            {"user_id": user_id, "chat_id": chat_id, "space": space},
             {"$inc": {"next_seq": 1}, "$set": {"updated_at": now}},
             return_document=ReturnDocument.BEFORE,
         )
@@ -128,10 +132,11 @@ class ChatHistoryService:
         offset: int = 0,
         scenario_id: str | None = None,
         project_id: str | None = None,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> ChatListSchema:
-        """Get user chats ordered by recent activity, newest first."""
+        """Get user chats of one space ordered by recent activity, newest first."""
 
-        query: dict[str, Any] = {"user_id": user_id}
+        query: dict[str, Any] = {"user_id": user_id, "space": space}
         if scenario_id is not None:
             query["scenario_id"] = {"$in": self._filter_candidates(scenario_id)}
         if project_id is not None:
@@ -145,17 +150,67 @@ class ChatHistoryService:
         ]
         return ChatListSchema(items=items, limit=limit, offset=offset)
 
-    async def get_unique_chat_titles(self, user_id: str) -> ChatTitleListSchema:
-        """Get all unique non-empty chat titles for a user."""
+    async def get_unique_chat_titles(
+        self,
+        user_id: str,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
+    ) -> ChatTitleListSchema:
+        """Get all unique non-empty chat titles for a user inside one space."""
 
         titles = await self._chats.distinct(
             "title",
             {
                 "user_id": user_id,
+                "space": space,
                 "title": {"$type": "string", "$ne": ""},
             },
         )
         return ChatTitleListSchema(items=sorted(titles))
+
+    async def count_chats_by_space(self, user_id: str) -> dict[str, int]:
+        """
+        Count user chats grouped by space.
+        Args:
+            user_id (str): String repr of user uuid.
+        Returns:
+            dict[str, int]: Chat count per space slug.
+        """
+
+        cursor = await self._chats.aggregate(
+            [
+                {"$match": {"user_id": user_id}},
+                {
+                    "$group": {
+                        "_id": {"$ifNull": ["$space", DEFAULT_CHAT_SPACE]},
+                        "count": {"$sum": 1},
+                    }
+                },
+            ]
+        )
+        return {document["_id"]: document["count"] async for document in cursor}
+
+    async def assert_chat_in_space(
+        self,
+        user_id: str,
+        chat_id: str,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
+    ) -> None:
+        """
+        Ensure a chat exists inside the requested space.
+        Args:
+            user_id (str): String repr of user uuid.
+            chat_id (str): String repr of chat uuid.
+            space (ChatSpace): Space the chat must belong to.
+        Returns:
+            None: Raises 404 when the chat lives in another space.
+        """
+
+        chat = await self._chats.find_one(
+            {"user_id": user_id, "chat_id": chat_id, "space": space},
+            {"_id": 1},
+        )
+        if not chat:
+            raise self._not_found(chat_id)
 
     async def get_chat(
         self,
@@ -163,10 +218,13 @@ class ChatHistoryService:
         chat_id: str,
         message_limit: int | None = None,
         before_seq: int | None = None,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> ChatSchema:
         """Get a user chat with an optional backwards page of ordered messages."""
 
-        chat = await self._chats.find_one({"user_id": user_id, "chat_id": chat_id})
+        chat = await self._chats.find_one(
+            {"user_id": user_id, "chat_id": chat_id, "space": space}
+        )
         if not chat:
             raise self._not_found(chat_id)
 
@@ -200,10 +258,17 @@ class ChatHistoryService:
             next_before_seq=next_before_seq,
         )
 
-    async def delete_chat(self, user_id: str, chat_id: str) -> DeleteChatSchema:
+    async def delete_chat(
+        self,
+        user_id: str,
+        chat_id: str,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
+    ) -> DeleteChatSchema:
         """Delete user chat and all its messages."""
 
-        result = await self._chats.delete_one({"user_id": user_id, "chat_id": chat_id})
+        result = await self._chats.delete_one(
+            {"user_id": user_id, "chat_id": chat_id, "space": space}
+        )
         if result.deleted_count == 0:
             raise self._not_found(chat_id)
 
@@ -225,9 +290,11 @@ class ChatHistoryService:
         chat_id: str,
         message_id: str,
         part_seq: int,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> MessagePartSchema:
         """Get one message part by id and sequence."""
 
+        await self.assert_chat_in_space(user_id, chat_id, space)
         document = await self._messages.find_one(
             {
                 "user_id": user_id,
@@ -315,6 +382,7 @@ class ChatHistoryService:
         tool_call_step: int,
         scenario_id: int | None = None,
         project_id: int | None = None,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
     ) -> ToolCallExtractDTO:
         """Build executable tool call payload from a stored message."""
 
@@ -326,6 +394,7 @@ class ChatHistoryService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Message not found",
             )
+        await self.assert_chat_in_space(user_id, target_message["chat_id"], space)
 
         previous_tool_calls: list[ToolCallDTO] = []
         cursor = self._messages.find(
@@ -420,6 +489,7 @@ class ChatHistoryService:
     def _chat_summary_from_document(document: dict[str, Any]) -> ChatSummarySchema:
         return ChatSummarySchema(
             chat_id=document["chat_id"],
+            space=document.get("space", DEFAULT_CHAT_SPACE),
             title=document.get("title"),
             scenario_id=document.get("scenario_id"),
             project_id=document.get("project_id"),
