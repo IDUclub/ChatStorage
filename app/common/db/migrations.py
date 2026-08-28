@@ -132,6 +132,10 @@ MESSAGES_VALIDATOR = {
                 "pattern": UUID_PATTERN,
                 "description": "Required service-generated message UUID",
             },
+            "source_event_id": {
+                "bsonType": ["string", "null"],
+                "description": "Optional idempotency key supplied by an event source",
+            },
             "seq": {
                 "bsonType": "int",
                 "minimum": 1,
@@ -483,6 +487,7 @@ async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
     await database["chats"].create_index(
         [("user_id", ASCENDING), ("space", ASCENDING), ("updated_at", DESCENDING)]
     )
+
     await database["chats"].create_index(
         [
             ("user_id", ASCENDING),
@@ -501,6 +506,34 @@ async def _migration_007_add_chat_space(database: AsyncDatabase) -> None:
     )
 
 
+async def _migration_008_add_source_event_id(database: AsyncDatabase) -> None:
+    """Allow idempotent persistence of externally sourced messages."""
+
+    try:
+        await database.command(
+            {
+                "collMod": "messages",
+                "validator": MESSAGES_VALIDATOR,
+                "validationAction": "error",
+                "validationLevel": "strict",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code != _NAMESPACE_NOT_FOUND:
+            raise
+
+    await database["messages"].create_index(
+        [
+            ("user_id", ASCENDING),
+            ("chat_id", ASCENDING),
+            ("source_event_id", ASCENDING),
+        ],
+        unique=True,
+        partialFilterExpression={"source_event_id": {"$type": "string"}},
+        name="user_chat_source_event_unique",
+    )
+
+
 # Ordered list of migrations. Append new ones; never reorder or rewrite applied ids.
 MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("001-add-project-id", _migration_001_add_project_id),
@@ -510,6 +543,7 @@ MIGRATIONS: list[tuple[str, Callable[[AsyncDatabase], Awaitable[None]]]] = [
     ("005-context-storage", _migration_005_context_storage),
     ("006-executable-norm-parts", _migration_006_executable_norm_parts),
     ("007-add-chat-space", _migration_007_add_chat_space),
+    ("008-add-source-event-id", _migration_008_add_source_event_id),
 ]
 
 

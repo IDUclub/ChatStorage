@@ -43,6 +43,7 @@ class MessageSchema(BaseModel):
     """Message returned to client."""
 
     message_id: str
+    source_event_id: str | None = None
     chat_id: str
     seq: int
     role: MessageRole

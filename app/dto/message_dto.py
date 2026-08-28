@@ -140,6 +140,7 @@ class MessageCreateDTO(BaseModel):
     content: str | None = Field(default=None, min_length=1)
     parts: list[MessagePartCreateDTO] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    source_event_id: str | None = Field(default=None, min_length=1, max_length=128)
 
     @model_validator(mode="after")
     def validate_message_body(self) -> "MessageCreateDTO":
