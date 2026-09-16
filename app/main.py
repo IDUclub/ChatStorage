@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
@@ -9,7 +9,6 @@ from starlette.middleware.gzip import GZipMiddleware
 from app.__version__ import APP_DESCRIPTION, APP_NAME, APP_VERSION
 from app.common.middlewares.exception_handler import ExceptionHandlerMiddleware
 from app.common.middlewares.request_logger import RequestLoggingMiddleware
-from app.depndencies.auth_dependencies import verify_service_token
 from app.depndencies.dependencies import (
     close_mongo_client,
     get_app_configuration,
@@ -68,7 +67,7 @@ app.include_router(chat_history_router)
 app.include_router(space_router)
 app.include_router(chat_context_router)
 app.include_router(internal_context_router)
-app.include_router(system_router, dependencies=[Depends(verify_service_token)])
+app.include_router(system_router)
 
 
 @app.get("/ping")

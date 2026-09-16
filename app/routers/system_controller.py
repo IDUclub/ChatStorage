@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.depndencies.auth_dependencies import verify_service_token
 from app.depndencies.dependencies import (
     MONGO_ENV_VARS,
     get_logs_path,
@@ -13,7 +14,7 @@ from app.depndencies.dependencies import (
 
 system_router = APIRouter(prefix="/system", tags=["system"])
 
-# TODO: Add admin authorization for all system endpoints
+# Diagnostic reads are public; configuration writes require a service token.
 
 
 class EnvVarValue(BaseModel):
@@ -40,7 +41,7 @@ async def get_all_env_vars():
     return dict(os.environ)
 
 
-@system_router.patch("/env")
+@system_router.patch("/env", dependencies=[Depends(verify_service_token)])
 async def update_env_vars(variables: dict[str, str]):
     """
     Updates multiple environment variables at once.
@@ -67,7 +68,7 @@ async def get_env_var(key: str):
     return {"key": key, "value": value}
 
 
-@system_router.put("/env/{key}")
+@system_router.put("/env/{key}", dependencies=[Depends(verify_service_token)])
 async def update_env_var(key: str, body: EnvVarValue):
     """
     Sets or updates the value of a specific environment variable.
