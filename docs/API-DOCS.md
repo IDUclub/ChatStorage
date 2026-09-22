@@ -342,7 +342,8 @@ Response `200`: `{ "chat_id": string, "deleted_messages": number }`. `404` if no
 
 ## System endpoints
 
-Prefix: `/system` — operational helpers protected by a verified service token.
+Prefix: `/system` — reading logs and environment variables requires no authorization.
+`PATCH /system/env` and `PUT /system/env/{key}` still require a verified service token.
 
 | Method & path | Description |
 |---|---|
