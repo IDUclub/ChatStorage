@@ -119,6 +119,86 @@ class TestExtractToolCallChain:
         assert tool_names == ["GetServices", "CreateBuffers"]
         assert "GetPhysicalObjects" not in tool_names
 
+    async def test_check_tool_replays_the_layers_it_reads(
+        self, service: ChatHistoryService
+    ) -> None:
+        payload = ToolCallExtractDTO(
+            tool_call=ToolCallDTO(
+                step=3,
+                tool_name="CheckDistanceFromSource",
+                arguments={"source_layer": "Школа", "targets": ["Жилой дом"]},
+            ),
+            previous_tool_calls=[
+                ToolCallDTO(
+                    step=1,
+                    tool_name="GetServices",
+                    arguments={"services_names": ["Школа"]},
+                ),
+                ToolCallDTO(
+                    step=2,
+                    tool_name="GetPhysicalObjects",
+                    arguments={"physical_objects_names": ["Жилой дом"]},
+                ),
+            ],
+        )
+
+        chain = await service.extract_tool_call_chain(payload)
+
+        assert chain.missing_dependencies == []
+        tool_names = [step.tool_call.tool_name for step in chain.execution_chain]
+        assert tool_names == [
+            "GetServices",
+            "GetPhysicalObjects",
+            "CheckDistanceFromSource",
+        ]
+        assert chain.execution_chain[-1].depends_on == [1, 2]
+
+    async def test_zone_uses_the_latest_provider_of_a_layer(
+        self, service: ChatHistoryService
+    ) -> None:
+        """Each zonal norm reads the zones fetched for it, not the first ones."""
+
+        payload = ToolCallExtractDTO(
+            tool_call=ToolCallDTO(
+                step=1,
+                tool_name="CreateRestrictionZones",
+                arguments={
+                    "layer_name": "Зона ограничения — СП 42, п. 7.6",
+                    "geometry_mode": "geometry",
+                    "source_layer": "functional_zones",
+                    "clip_layer": "project_territory",
+                },
+            ),
+            previous_tool_calls=[
+                ToolCallDTO(
+                    step=1,
+                    tool_name="GetProjectTerritory",
+                    arguments={"scenario_id": 772},
+                ),
+                ToolCallDTO(
+                    step=1,
+                    tool_name="GetFunctionalZones",
+                    arguments={"scenario_id": 772, "zone_type_names": ["Жилая"]},
+                ),
+                ToolCallDTO(
+                    step=1,
+                    tool_name="GetFunctionalZones",
+                    arguments={"scenario_id": 772, "zone_type_names": ["Рекреация"]},
+                ),
+            ],
+        )
+
+        chain = await service.extract_tool_call_chain(payload)
+
+        assert chain.missing_dependencies == []
+        calls = {
+            step.tool_call.tool_name: step.tool_call for step in chain.execution_chain
+        }
+        assert len(chain.execution_chain) == 3
+        assert chain.execution_chain[-1].tool_call.tool_name == "CreateRestrictionZones"
+        assert "GetProjectTerritory" in calls
+        assert calls["GetFunctionalZones"].arguments["zone_type_names"] == ["Рекреация"]
+
 
 class TestProvidedAndRequiredRefs:
     """Special-cased provider/consumer extraction per tool name."""
@@ -155,6 +235,34 @@ class TestProvidedAndRequiredRefs:
         refs = ChatHistoryService._required_refs(call)
         assert "road" in refs
         assert "zone" in refs
+
+    @pytest.mark.parametrize(
+        ("tool_name", "layer"),
+        [
+            ("GetFunctionalZones", "functional_zones"),
+            ("GetProjectTerritory", "project_territory"),
+        ],
+    )
+    def test_fixed_name_layer_providers(self, tool_name: str, layer: str) -> None:
+        call = ToolCallSchema(tool_name=tool_name, arguments={"scenario_id": 772})
+
+        assert ChatHistoryService._provided_refs(call) == [layer]
+
+    def test_layer_tool_requires_named_layers(self) -> None:
+        call = ToolCallSchema(
+            tool_name="CheckPresenceWithin",
+            arguments={
+                "objects_layer": "Жилой дом",
+                "required_neighbor_layers": ["Школа", "Детский сад"],
+                "distance_m": 500.0,
+            },
+        )
+
+        assert ChatHistoryService._required_refs(call) == [
+            "Жилой дом",
+            "Школа",
+            "Детский сад",
+        ]
 
     def test_explicit_depends_on_is_required(self) -> None:
         call = ToolCallSchema(

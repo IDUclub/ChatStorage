@@ -35,6 +35,32 @@ from app.schema.chat_history_schema import (
     ToolCallSchema,
 )
 
+# Retrieval tools whose result layer has a fixed name instead of an argument value.
+_FIXED_LAYER_PROVIDERS = {
+    "GetFunctionalZones": "functional_zones",
+    "GetProjectTerritory": "project_territory",
+}
+# Compliance geometry tools and the arguments that name the layers they read.
+_LAYER_READING_TOOLS = frozenset(
+    {
+        "CheckDistanceFromSource",
+        "CheckDistanceTable",
+        "CheckPresenceWithin",
+        "CheckZonalAttributeThreshold",
+        "CheckZonalRatio",
+        "CreateRestrictionZones",
+    }
+)
+_LAYER_REF_ARGUMENTS = (
+    "source_layer",
+    "objects_layer",
+    "zones_layer",
+    "numerator_layer",
+    "clip_layer",
+    "targets",
+    "required_neighbor_layers",
+)
+
 
 class ChatHistoryService:
     """Service for loading and storing assistant chat history."""
@@ -352,21 +378,23 @@ class ChatHistoryService:
         target_step = self._tool_call_step_from_dto(payload.tool_call)
         all_steps = [*previous_steps, target_step]
 
-        providers: dict[str, int] = {}
+        providers: dict[str, list[int]] = {}
         provides_by_step: dict[int, list[str]] = {}
         for index, step in enumerate(all_steps):
             provided_refs = self._provided_refs(step.tool_call)
             provides_by_step[index] = provided_refs
             for provided_ref in provided_refs:
-                providers.setdefault(self._normalize_ref(provided_ref), index)
+                providers.setdefault(self._normalize_ref(provided_ref), []).append(
+                    index
+                )
 
         dependencies_by_step: dict[int, list[int]] = {}
         for index, step in enumerate(all_steps):
             required_refs = self._required_refs(step.tool_call)
             dependencies: list[int] = []
             for required_ref in required_refs:
-                provider_index = providers.get(self._normalize_ref(required_ref))
-                if provider_index is not None and provider_index < index:
+                provider_index = self._provider_before(providers, required_ref, index)
+                if provider_index is not None:
                     self._append_unique_int(dependencies, provider_index)
             dependencies_by_step[index] = dependencies
 
@@ -377,8 +405,7 @@ class ChatHistoryService:
         missing_dependencies: set[str] = set()
         for index in chain_indexes:
             for required_ref in self._required_refs(all_steps[index].tool_call):
-                provider_index = providers.get(self._normalize_ref(required_ref))
-                if provider_index is None or provider_index >= index:
+                if self._provider_before(providers, required_ref, index) is None:
                     missing_dependencies.add(required_ref)
 
         execution_chain = [
@@ -643,6 +670,9 @@ class ChatHistoryService:
         if tool_call.tool_name == "GetPhysicalObjects":
             return cls._string_list(arguments.get("physical_objects_names"))
 
+        if tool_call.tool_name in _FIXED_LAYER_PROVIDERS:
+            return [_FIXED_LAYER_PROVIDERS[tool_call.tool_name]]
+
         if tool_call.tool_name == "CreateBuffers":
             buffer_info = arguments.get("buffer_info")
             if not isinstance(buffer_info, dict):
@@ -681,8 +711,28 @@ class ChatHistoryService:
                             cls._append_unique_str(refs, ref)
             return refs
 
+        refs = []
+        if tool_call.tool_name in _LAYER_READING_TOOLS:
+            for argument in _LAYER_REF_ARGUMENTS:
+                for ref in cls._string_list(arguments.get(argument)):
+                    cls._append_unique_str(refs, ref)
         explicit_dependencies = arguments.get("depends_on") or arguments.get("requires")
-        return cls._string_list(explicit_dependencies)
+        for ref in cls._string_list(explicit_dependencies):
+            cls._append_unique_str(refs, ref)
+        return refs
+
+    @classmethod
+    def _provider_before(
+        cls, providers: dict[str, list[int]], ref: str, index: int
+    ) -> int | None:
+        """The latest step before ``index`` that provides ``ref``."""
+
+        earlier = [
+            provider
+            for provider in providers.get(cls._normalize_ref(ref), [])
+            if provider < index
+        ]
+        return earlier[-1] if earlier else None
 
     @classmethod
     def _collect_required_step_indexes(
