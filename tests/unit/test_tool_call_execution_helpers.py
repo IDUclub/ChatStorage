@@ -117,6 +117,16 @@ class TestArgumentsForToolCall:
         assert arguments == {"restriction_id": "r1", "layers": layers}
         assert call.arguments == {"restriction_id": "r1"}
 
+    def test_restriction_zones_replay_injects_layers(self) -> None:
+        layers = {"Школа": {"type": "FeatureCollection"}}
+        call = ToolCallSchema(
+            tool_name="CreateRestrictionZones",
+            arguments={"source_layer": "Школа", "geometry_mode": "buffer"},
+        )
+        arguments = ToolCallExecutionService._arguments_for_tool_call(call, layers)
+        assert arguments["layers"] == layers
+        assert "layers" not in call.arguments
+
 
 class TestResultData:
     """Result unwrapping into a flat dict."""
