@@ -95,6 +95,23 @@ class ChatHistoryService:
         """Add message to a user chat inside one space."""
 
         now = self._now()
+        if message.source_event_id:
+            chat_exists = await self._chats.find_one(
+                {"user_id": user_id, "chat_id": chat_id, "space": space},
+                {"_id": 1},
+            )
+            if not chat_exists:
+                raise self._not_found(chat_id)
+            existing = await self._messages.find_one(
+                {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "source_event_id": message.source_event_id,
+                }
+            )
+            if existing:
+                return self._message_from_document(existing)
+
         chat = await self._chats.find_one_and_update(
             {"user_id": user_id, "chat_id": chat_id, "space": space},
             {"$inc": {"next_seq": 1}, "$set": {"updated_at": now}},
@@ -107,6 +124,7 @@ class ChatHistoryService:
             "user_id": user_id,
             "chat_id": chat_id,
             "message_id": str(uuid4()),
+            "source_event_id": message.source_event_id,
             "seq": chat["next_seq"],
             "role": message.role,
             "parts": self._build_parts(message, now),
@@ -118,6 +136,16 @@ class ChatHistoryService:
         try:
             await self._messages.insert_one(document)
         except DuplicateKeyError as exc:
+            if message.source_event_id:
+                existing = await self._messages.find_one(
+                    {
+                        "user_id": user_id,
+                        "chat_id": chat_id,
+                        "source_event_id": message.source_event_id,
+                    }
+                )
+                if existing:
+                    return self._message_from_document(existing)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Message sequence collision, please retry",
@@ -502,6 +530,7 @@ class ChatHistoryService:
     def _message_from_document(document: dict[str, Any]) -> MessageSchema:
         return MessageSchema(
             message_id=document["message_id"],
+            source_event_id=document.get("source_event_id"),
             chat_id=document["chat_id"],
             seq=document["seq"],
             role=document["role"],

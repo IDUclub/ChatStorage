@@ -69,6 +69,15 @@ async def create_schema_collections(database: AsyncDatabase) -> None:
         [("user_id", ASCENDING), ("chat_id", ASCENDING), ("seq", ASCENDING)],
         unique=True,
     )
+    await database["messages"].create_index(
+        [
+            ("user_id", ASCENDING),
+            ("chat_id", ASCENDING),
+            ("source_event_id", ASCENDING),
+        ],
+        unique=True,
+        partialFilterExpression={"source_event_id": {"$type": "string"}},
+    )
 
 
 @pytest_asyncio.fixture

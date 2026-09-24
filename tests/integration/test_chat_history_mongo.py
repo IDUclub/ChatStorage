@@ -272,6 +272,29 @@ async def test_chats_are_isolated_per_space(service: ChatHistoryService) -> None
     assert synapse.items[0].space == "synapse"
 
 
+async def test_source_event_id_makes_message_creation_idempotent(
+    service: ChatHistoryService,
+) -> None:
+    user_id = str(uuid4())
+    chat = await service.create_chat(
+        user_id, ChatCreateDTO(title="Synapse chat", space="synapse")
+    )
+    payload = MessageCreateDTO(
+        role="system",
+        content="delegation completed",
+        source_event_id="01991d22-7a04-7d93-9900-cc95d8db4f47",
+    )
+
+    first = await service.add_message(user_id, chat.chat_id, payload, space="synapse")
+    repeated = await service.add_message(
+        user_id, chat.chat_id, payload, space="synapse"
+    )
+
+    assert repeated.message_id == first.message_id
+    assert repeated.seq == first.seq
+    assert repeated.source_event_id == payload.source_event_id
+
+
 async def test_chat_titles_are_isolated_per_space(service: ChatHistoryService) -> None:
     user_id = _user_id()
     await service.create_chat(user_id, ChatCreateDTO(title="Main chat"))

@@ -37,6 +37,7 @@ class MessageDocument(TypedDict):
     user_id: str
     chat_id: str
     message_id: str
+    source_event_id: NotRequired[str | None]
     seq: int
     role: MessageRole
     parts: list[MessagePartDocument]

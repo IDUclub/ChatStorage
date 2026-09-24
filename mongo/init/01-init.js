@@ -102,6 +102,10 @@ db.createCollection("messages", {
           pattern: uuidPattern,
           description: "Required service-generated message UUID"
         },
+        source_event_id: {
+          bsonType: ["string", "null"],
+          description: "Optional idempotency key supplied by an event source"
+        },
         seq: {
           bsonType: "int",
           minimum: 1,
@@ -174,6 +178,14 @@ db.chats.createIndex({ user_id: 1, space: 1, project_id: 1, updated_at: -1 });
 
 db.messages.createIndex({ user_id: 1, chat_id: 1, seq: 1 }, { unique: true });
 db.messages.createIndex({ user_id: 1, chat_id: 1, message_id: 1 }, { unique: true });
+db.messages.createIndex(
+  { user_id: 1, chat_id: 1, source_event_id: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { source_event_id: { $type: "string" } },
+    name: "user_chat_source_event_unique"
+  }
+);
 db.messages.createIndex({ user_id: 1, chat_id: 1, created_at: 1 });
 
 db.createCollection("chat_contexts", {
