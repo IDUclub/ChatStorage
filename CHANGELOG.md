@@ -1,3 +1,14 @@
+## v0.5.0 (2026-09-25)
+
+### Feat
+
+- make Synapse event persistence idempotent (#37)
+- replay restriction zones with accumulated layers
+
+### Fix
+
+- allow unauthenticated log and configuration reads (#36)
+
 ## v0.4.1 (2026-08-24)
 
 ### Fix
