@@ -1,3 +1,9 @@
+## v0.5.1 (2026-09-25)
+
+### Fix
+
+- replay compliance layers from the calls that fetched them (#39)
+
 ## v0.5.0 (2026-09-25)
 
 ### Feat
