@@ -177,7 +177,9 @@ async def test_migrations_backfill_chat_space_on_migrated_deployment(
 
         # Every migration before the space one is already recorded, so only 007 runs.
         now = datetime.now(UTC)
-        for migration_id, _ in MIGRATIONS[:-1]:
+        for migration_id, _ in MIGRATIONS:
+            if migration_id == "007-add-chat-space":
+                break
             await database["_migrations"].insert_one(
                 {"_id": migration_id, "applied_at": now}
             )

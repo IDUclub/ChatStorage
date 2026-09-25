@@ -19,6 +19,19 @@ from app.schema.chat_history_schema import (
 )
 from app.services.chat_history_service import ChatHistoryService
 
+# Geometry tools that take the replayed layers as their ``layers`` argument.
+_LAYER_TOOLS = frozenset(
+    {
+        "CreateRestrictions",
+        "CheckDistanceFromSource",
+        "CheckDistanceTable",
+        "CheckPresenceWithin",
+        "CheckZonalAttributeThreshold",
+        "CheckZonalRatio",
+        "CreateRestrictionZones",
+    }
+)
+
 
 class ToolCallExecutionService:
     """
@@ -179,15 +192,7 @@ class ToolCallExecutionService:
     ) -> dict[str, Any]:
         if tool_call.tool_name == "CreateBuffers":
             return {**base_meta, "objects": accumulated_layers}
-        if tool_call.tool_name == "CreateRestrictions":
-            return {**base_meta, "layers": accumulated_layers}
-        if tool_call.tool_name in {
-            "CheckDistanceFromSource",
-            "CheckDistanceTable",
-            "CheckPresenceWithin",
-            "CheckZonalAttributeThreshold",
-            "CheckZonalRatio",
-        }:
+        if tool_call.tool_name in _LAYER_TOOLS:
             return {**base_meta, "layers": accumulated_layers}
         return base_meta
 
@@ -201,14 +206,7 @@ class ToolCallExecutionService:
         arguments = dict(tool_call.arguments)
         if tool_call.tool_name == "CreateBuffers":
             arguments["objects"] = accumulated_layers
-        elif tool_call.tool_name in {
-            "CreateRestrictions",
-            "CheckDistanceFromSource",
-            "CheckDistanceTable",
-            "CheckPresenceWithin",
-            "CheckZonalAttributeThreshold",
-            "CheckZonalRatio",
-        }:
+        elif tool_call.tool_name in _LAYER_TOOLS:
             arguments["layers"] = accumulated_layers
         return arguments
 
