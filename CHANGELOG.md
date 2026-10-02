@@ -1,3 +1,9 @@
+## v0.5.3 (2026-10-02)
+
+[fix/version-status-token](https://github.com/IDUclub/ChatStorage/pull/42) (#42)
+
+- ci: set the passing version status with VERSION_STATUS_TOKEN so the merge starts the dev release
+
 ## v0.5.2 (2026-10-02)
 
 [chore/versioning-policy](https://github.com/IDUclub/ChatStorage/pull/41) (#41)
