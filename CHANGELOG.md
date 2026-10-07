@@ -1,3 +1,9 @@
+## v0.5.4 (2026-10-07)
+
+[fix/autoformat-skip-ci](https://github.com/IDUclub/ChatStorage/pull/43) (#43)
+
+- ci: let auto-merge bump the version after an auto-format commit
+
 ## v0.5.3 (2026-10-02)
 
 [fix/version-status-token](https://github.com/IDUclub/ChatStorage/pull/42) (#42)
