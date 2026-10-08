@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schema.chat_history_schema import (
     DEFAULT_CHAT_SPACE,
@@ -159,6 +159,20 @@ class ChatCreateDTO(BaseModel):
     scenario_id: str | int | None = None
     project_id: str | int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatUpdateDTO(BaseModel):
+    """Chat rename payload."""
+
+    title: str = Field(min_length=1, max_length=256)
+
+    @field_validator("title")
+    @classmethod
+    def strip_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Title must not be blank")
+        return value
 
 
 class ToolCallDTO(BaseModel):
