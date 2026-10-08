@@ -8,6 +8,7 @@ from app.depndencies.dependencies import (
 from app.depndencies.space_dependencies import get_current_space
 from app.dto.message_dto import (
     ChatCreateDTO,
+    ChatUpdateDTO,
     MessageCreateDTO,
 )
 from app.schema.chat_history_schema import (
@@ -295,6 +296,41 @@ async def execute_tool_call(
         scenario_id=scenario_id,
         project_id=project_id,
         space=space,
+    )
+
+
+@chat_history_router.patch("/{chat_id}", response_model=ChatSummarySchema)
+async def rename_chat(
+    payload: ChatUpdateDTO = Body(
+        ...,
+        openapi_examples={
+            "rename_chat": {
+                "summary": "Rename chat",
+                "value": {"title": "Нормы озеленения жилых районов"},
+            }
+        },
+    ),
+    chat_id: str = Path(
+        ...,
+        min_length=36,
+        max_length=36,
+        examples=[CHAT_ID_EXAMPLE],
+    ),
+    space: ChatSpace = Depends(get_current_space),
+    user_id: str = Depends(get_current_user_id),
+    service: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatSummarySchema:
+    """
+    Example:
+    PATCH /api/v1/chat_history/f47ac10b-58cc-4372-a567-0e02b2c3d479?space=main
+    Authorization: Bearer <token>
+    Content-Type: application/json
+
+    {"title": "Нормы озеленения жилых районов"}
+    """
+
+    return await service.rename_chat(
+        user_id=user_id, chat_id=chat_id, payload=payload, space=space
     )
 
 

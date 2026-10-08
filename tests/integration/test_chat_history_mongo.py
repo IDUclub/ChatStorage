@@ -12,6 +12,7 @@ from pymongo.errors import PyMongoError
 
 from app.dto.message_dto import (
     ChatCreateDTO,
+    ChatUpdateDTO,
     MessageCreateDTO,
     MessagePartCreateDTO,
 )
@@ -429,4 +430,27 @@ async def test_validator_rejects_unknown_space(mongo_database: AsyncDatabase) ->
                 "created_at": now,
                 "updated_at": now,
             }
+        )
+
+
+async def test_rename_chat_changes_only_the_owners_title(
+    service: ChatHistoryService,
+) -> None:
+    from fastapi import HTTPException
+
+    user_id = _user_id()
+    chat = await service.create_chat(user_id, ChatCreateDTO(title="Временное"))
+    stored = await service.get_chat(user_id, chat.chat_id)
+
+    renamed = await service.rename_chat(
+        user_id, chat.chat_id, ChatUpdateDTO(title="Нормы озеленения")
+    )
+
+    assert renamed.title == "Нормы озеленения"
+    # A rename is not conversation activity: the chat keeps its place in the list.
+    assert renamed.updated_at == stored.updated_at
+    assert (await service.get_chat(user_id, chat.chat_id)).title == "Нормы озеленения"
+    with pytest.raises(HTTPException):
+        await service.rename_chat(
+            _user_id(), chat.chat_id, ChatUpdateDTO(title="Чужой чат")
         )
