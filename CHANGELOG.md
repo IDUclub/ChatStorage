@@ -1,3 +1,9 @@
+## v0.6.0 (2026-10-12)
+
+[feat/chat-rename](https://github.com/IDUclub/ChatStorage/pull/44) (#44)
+
+- feat: rename a chat with PATCH /api/v1/chat_history/{chat_id}
+
 ## v0.5.4 (2026-10-07)
 
 [fix/autoformat-skip-ci](https://github.com/IDUclub/ChatStorage/pull/43) (#43)
