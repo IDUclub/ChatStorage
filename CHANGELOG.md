@@ -1,3 +1,10 @@
+## v0.6.1 (2026-10-20)
+
+[fix/ICII-190-docker-log-rotation](https://github.com/IDUclub/ChatStorage/pull/45) (#45)
+
+- fix: cap container logs at 100 MB in docker compose
+- fix: rotate the log file by size once a day, keeping logs within 100 MB
+
 ## v0.6.0 (2026-10-12)
 
 [feat/chat-rename](https://github.com/IDUclub/ChatStorage/pull/44) (#44)
