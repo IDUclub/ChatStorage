@@ -1,5 +1,13 @@
+# Docker keeps at most 5 files of 20 MB (100 MB) of stdout/stderr per container.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   chat_storage:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,6 +23,7 @@ services:
           - chat_storage
 
   mongo:
+    logging: *default-logging
     image: mongo:8.0.21-rc1-noble
     container_name: mongo_db
     restart: unless-stopped

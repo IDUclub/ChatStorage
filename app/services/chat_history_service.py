@@ -16,6 +16,7 @@ from app.common.db.chat_history_document import (
 )
 from app.dto.message_dto import (
     ChatCreateDTO,
+    ChatUpdateDTO,
     MessageCreateDTO,
     ToolCallDTO,
     ToolCallExtractDTO,
@@ -311,6 +312,30 @@ class ChatHistoryService:
             has_more=has_more,
             next_before_seq=next_before_seq,
         )
+
+    async def rename_chat(
+        self,
+        user_id: str,
+        chat_id: str,
+        payload: ChatUpdateDTO,
+        space: ChatSpace = DEFAULT_CHAT_SPACE,
+    ) -> ChatSummarySchema:
+        """
+        Set the title of a user chat.
+
+        An agent creates the chat with a provisional title so the answer does not
+        wait for title generation, and renames it once the title is ready.
+        ``updated_at`` is left alone: it orders chats by conversation activity.
+        """
+
+        document = await self._chats.find_one_and_update(
+            {"user_id": user_id, "chat_id": chat_id, "space": space},
+            {"$set": {"title": payload.title}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if document is None:
+            raise self._not_found(chat_id)
+        return self._chat_summary_from_document(document)
 
     async def delete_chat(
         self,
