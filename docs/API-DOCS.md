@@ -329,6 +329,22 @@ Errors: `404` (message / part / tool call step not found), `422` (missing
 dependencies — body includes `missing_dependencies` and `execution_chain`),
 `503` (no MCP URL configured).
 
+### Rename chat
+
+```http
+PATCH /api/v1/chat_history/{chat_id}?space=main
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "title": "Нормы озеленения жилых районов" }
+```
+
+`title` — 1–256 characters, surrounding whitespace is stripped. Response `200`:
+`ChatSummary` with the new title. `updated_at` is unchanged, so the chat keeps its
+place in the list. `404` if the caller has no such chat in this space. Agents use it
+to replace the provisional title they create a chat with once the generated title
+is ready.
+
 ### Delete chat
 
 ```http

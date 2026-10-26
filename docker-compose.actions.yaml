@@ -1,5 +1,13 @@
+# Docker keeps at most 5 files of 20 MB (100 MB) of stdout/stderr per container.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   chat_storage:
+    logging: *default-logging
     image: ${IMAGE}
     container_name: ${CONTAINER_NAME}
     env_file:
