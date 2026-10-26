@@ -1,3 +1,9 @@
+## v0.6.2 (2026-10-26)
+
+[chore/sync-main](https://github.com/IDUclub/ChatStorage/pull/47) (#47)
+
+- v0.6.1 (#46)
+
 ## v0.6.1 (2026-10-20)
 
 [fix/ICII-190-docker-log-rotation](https://github.com/IDUclub/ChatStorage/pull/45) (#45)
