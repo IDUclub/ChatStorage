@@ -1,3 +1,9 @@
+## v0.7.0 (2026-10-29)
+
+[feat/ICII-226-compilance-vis-status](https://github.com/IDUclub/ChatStorage/pull/48) (#48)
+
+- feat: replay GetServicesByGeometry chains and show the norm layer of Check* calls
+
 ## v0.6.2 (2026-10-26)
 
 [chore/sync-main](https://github.com/IDUclub/ChatStorage/pull/47) (#47)
