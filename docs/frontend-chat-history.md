@@ -407,6 +407,17 @@ Authorization: Bearer <token>
 состоянию сценария: это повторный расчёт, а не гарантированное историческое
 воспроизведение без immutable revision или снимка данных.
 
+`GetServicesByGeometry` читает ссылки `zones_layers` и предоставляет слой по значению
+`layer_name`. Поддерживается цепочка `GetProjectTerritory → GetServicesByGeometry
+→ CreateRestrictionZones → GetServicesByGeometry → Check*`: источники ищутся по
+`project_territory` с `buffer_m`, цели — по слоям зон. Накопленные слои передаются
+в аргумент `layers` и MCP meta; `layers` удаляется из сохраняемых вызовов этих
+инструментов. Если Check* возвращает `norm_layer`, результат шага и итоговый
+`result` содержат `{"norm_layer": FeatureCollection}` — слой нормы со статусами,
+зонами, нарушениями и объектами. Для старых ответов без `norm_layer` формат сохраняется.
+Читателями слоёв также являются `CheckObjectAttributeThreshold` и
+`CheckAccessibilityWithin`; явный `project_layer` учитывается как зависимость.
+
 Path:
 
 - `message_id` - id сообщения, где лежит part с tool calls.
