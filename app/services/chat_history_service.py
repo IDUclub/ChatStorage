@@ -47,17 +47,22 @@ _LAYER_READING_TOOLS = frozenset(
         "CheckDistanceFromSource",
         "CheckDistanceTable",
         "CheckPresenceWithin",
+        "CheckObjectAttributeThreshold",
+        "CheckAccessibilityWithin",
         "CheckZonalAttributeThreshold",
         "CheckZonalRatio",
         "CreateRestrictionZones",
+        "GetServicesByGeometry",
     }
 )
 _LAYER_REF_ARGUMENTS = (
     "source_layer",
     "objects_layer",
     "zones_layer",
+    "zones_layers",
     "numerator_layer",
     "clip_layer",
+    "project_layer",
     "targets",
     "required_neighbor_layers",
 )
@@ -548,7 +553,11 @@ class ChatHistoryService:
                 doc: MessagePartDocument = {
                     "part_seq": index,
                     "kind": part.kind,
-                    "payload": part.payload,
+                    "payload": (
+                        ChatHistoryService._compact_tool_call_payload(part.payload)
+                        if part.kind == "tool_call"
+                        else part.payload
+                    ),
                     "created_at": created_at,
                 }
                 if part.mcp_source is not None:
@@ -564,6 +573,37 @@ class ChatHistoryService:
                 "created_at": created_at,
             }
         ]
+
+    @staticmethod
+    def _compact_tool_call_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        """Keep layer data out of history, including function-wrapped calls."""
+
+        compact = dict(payload)
+        for key in ("calls", "tool_calls"):
+            if not isinstance(payload.get(key), list):
+                continue
+            calls = []
+            for call in payload[key]:
+                call = dict(call)
+                function = call.get("function") or {}
+                name = call.get("tool_name") or call.get("name") or function.get("name")
+                if name in _LAYER_READING_TOOLS:
+                    if isinstance(call.get("arguments"), dict):
+                        call["arguments"] = {
+                            k: v for k, v in call["arguments"].items() if k != "layers"
+                        }
+                    if isinstance(function.get("arguments"), dict):
+                        call["function"] = {
+                            **function,
+                            "arguments": {
+                                k: v
+                                for k, v in function["arguments"].items()
+                                if k != "layers"
+                            },
+                        }
+                calls.append(call)
+            compact[key] = calls
+        return compact
 
     @staticmethod
     def _chat_summary_from_document(document: dict[str, Any]) -> ChatSummarySchema:
@@ -691,6 +731,9 @@ class ChatHistoryService:
         arguments = tool_call.arguments
         if tool_call.tool_name == "GetServices":
             return cls._string_list(arguments.get("services_names"))
+
+        if tool_call.tool_name == "GetServicesByGeometry":
+            return cls._string_list(arguments.get("layer_name"))
 
         if tool_call.tool_name == "GetPhysicalObjects":
             return cls._string_list(arguments.get("physical_objects_names"))

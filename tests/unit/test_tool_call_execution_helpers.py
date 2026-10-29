@@ -1,12 +1,13 @@
 """Unit tests for ToolCallExecutionService pure helpers.
 
-The MCP round-trip in ``execute_tool_call`` is not exercised here (that needs a
-live MCP server — see the integration tests). These cover the data-shaping and
-meta-building helpers, plus the early 503 guard when no MCP URL is configured.
+The MCP client is mocked for replay; no live server is needed. These also cover
+the data-shaping helpers and the early 503 guard when no MCP URL is configured.
 """
 
+from copy import deepcopy
 from dataclasses import dataclass
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -96,21 +97,40 @@ class TestMetaForToolCall:
 
         assert meta == base
 
-    def test_compliance_tool_gets_layers(self) -> None:
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "CheckDistanceFromSource",
+            "GetServicesByGeometry",
+            "CheckObjectAttributeThreshold",
+            "CheckAccessibilityWithin",
+        ],
+    )
+    def test_compliance_tool_gets_layers(self, tool_name: str) -> None:
         layers = {"houses": {"type": "FeatureCollection"}}
         meta = ToolCallExecutionService._meta_for_tool_call(
-            ToolCallSchema(tool_name="CheckDistanceFromSource"), {}, layers
+            ToolCallSchema(tool_name=tool_name), {}, layers
         )
         assert meta == {"layers": layers}
 
 
 class TestArgumentsForToolCall:
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "CheckDistanceFromSource",
+            "GetServicesByGeometry",
+            "CheckObjectAttributeThreshold",
+            "CheckAccessibilityWithin",
+        ],
+    )
     def test_compliance_replay_injects_layers_without_changing_stored_call(
         self,
+        tool_name: str,
     ) -> None:
         layers = {"houses": {"type": "FeatureCollection"}}
         call = ToolCallSchema(
-            tool_name="CheckDistanceFromSource",
+            tool_name=tool_name,
             arguments={"restriction_id": "r1"},
         )
         arguments = ToolCallExecutionService._arguments_for_tool_call(call, layers)
@@ -205,3 +225,95 @@ class TestExecuteGuard:
             await service.execute_tool_call(user_id="u", payload=payload)
 
         assert exc_info.value.status_code == 503
+
+
+class TestGeometryReplay:
+    @pytest.mark.parametrize("with_norm_layer", [True, False])
+    async def test_geometry_layers_reach_check_and_norm_is_displayed(
+        self,
+        geometry_replay_payload: ToolCallExtractDTO,
+        with_norm_layer: bool,
+    ) -> None:
+        territory = {"type": "FeatureCollection", "features": [], "meta": {"id": "p"}}
+        sources = {"type": "FeatureCollection", "features": [], "meta": {"id": "s"}}
+        zones = {"type": "FeatureCollection", "features": [], "meta": {"id": "z"}}
+        targets = {"type": "FeatureCollection", "features": [], "meta": {"id": "t"}}
+        norm = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [30, 60]},
+                    "properties": {
+                        "feature_kind": "zone",
+                        "norm_id": "r1",
+                        "status": "passed",
+                    },
+                }
+            ],
+        }
+        check_result = {
+            "passed_objects": targets,
+            "violated_objects": {"type": "FeatureCollection", "features": []},
+            "coverage": {"checked_objects": 1},
+            "summary": {"passed_objects": 1},
+        }
+        if with_norm_layer:
+            check_result["norm_layer"] = norm
+        zone_name = "Зона ограничения — СП 42, п. 7.1"
+        responses = iter(
+            [
+                {"project_territory": territory},
+                {"Источники — Школа": sources},
+                {
+                    zone_name: zones,
+                    "norm_layer": {"type": "FeatureCollection", "features": []},
+                },
+                {"Цели — Театр": targets},
+                check_result,
+            ]
+        )
+        calls = []
+
+        async def call_tool(name, arguments, *, meta):
+            # Snapshot before subsequent steps extend the accumulated dictionary.
+            calls.append((name, deepcopy(arguments), deepcopy(meta)))
+            return SimpleNamespace(data=next(responses))
+
+        mcp = MagicMock()
+        mcp.call_tool = AsyncMock(side_effect=call_tool)
+        mcp.__aenter__ = AsyncMock(return_value=mcp)
+        mcp.__aexit__ = AsyncMock(return_value=False)
+        service = ToolCallExecutionService(
+            idu_mcp_url="http://idu-mcp/mcp",
+            chain_builder=ChatHistoryService(MagicMock()),
+            service_auth=MagicMock(),
+        )
+        with patch("app.services.tool_call_execution_service.Client", return_value=mcp):
+            result = await service.execute_tool_call("user", geometry_replay_payload)
+
+        assert [name for name, _, _ in calls] == [
+            "GetProjectTerritory",
+            "GetServicesByGeometry",
+            "CreateRestrictionZones",
+            "GetServicesByGeometry",
+            "CheckDistanceFromSource",
+        ]
+        assert calls[1][1]["layers"] == {"project_territory": territory}
+        assert calls[1][1]["zones_layers"] == ["project_territory"]
+        assert calls[1][1]["buffer_m"] == 500
+        assert calls[2][1]["layers"]["Источники — Школа"] == sources
+        assert calls[3][1]["zones_layers"] == [zone_name]
+        assert calls[3][1]["layers"][zone_name] == zones
+        assert "Цели — Театр" not in calls[3][1]["layers"]
+        assert calls[4][1]["layers"]["Цели — Театр"] == targets
+        assert calls[4][1]["layers"][zone_name] == zones
+        assert result.steps[3].result == {"Цели — Театр": targets}
+        for _, arguments, meta in calls[1:]:
+            assert meta["layers"] == arguments["layers"]
+            assert meta["scenario_id"] == 772
+        expected = {"norm_layer": norm} if with_norm_layer else check_result
+        assert result.steps[-1].result == expected
+        assert result.result == expected
+        assert all("layers" not in step.tool_call.arguments for step in result.steps)
+        assert "layers" not in geometry_replay_payload.tool_call.arguments

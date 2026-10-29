@@ -26,9 +26,12 @@ _LAYER_TOOLS = frozenset(
         "CheckDistanceFromSource",
         "CheckDistanceTable",
         "CheckPresenceWithin",
+        "CheckObjectAttributeThreshold",
+        "CheckAccessibilityWithin",
         "CheckZonalAttributeThreshold",
         "CheckZonalRatio",
         "CreateRestrictionZones",
+        "GetServicesByGeometry",
     }
 )
 
@@ -118,6 +121,12 @@ class ToolCallExecutionService:
                 result = self.to_plain_data(getattr(raw_result, "data", raw_result))
                 result_data = self._result_data(result)
                 self._update_accumulated_layers(accumulated_layers, result_data)
+                # New compliance results expose the complete norm visualization.
+                # Older MCP versions still return only the legacy result baskets.
+                if tool_call.tool_name.startswith("Check") and isinstance(
+                    result_data.get("norm_layer"), dict
+                ):
+                    result_data = {"norm_layer": result_data["norm_layer"]}
                 steps.append(
                     ToolCallResultStepSchema(
                         order=execution_step.order,

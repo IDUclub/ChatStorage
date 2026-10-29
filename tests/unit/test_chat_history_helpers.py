@@ -11,7 +11,12 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.dto.message_dto import ToolCallDTO, ToolCallExtractDTO
+from app.dto.message_dto import (
+    MessageCreateDTO,
+    MessagePartCreateDTO,
+    ToolCallDTO,
+    ToolCallExtractDTO,
+)
 from app.schema.chat_history_schema import ToolCallSchema
 from app.services.chat_history_service import ChatHistoryService
 
@@ -25,6 +30,27 @@ def service() -> ChatHistoryService:
 
 class TestExtractToolCallChain:
     """Dependency-chain reconstruction for stored tool calls."""
+
+    async def test_geometry_fetch_chain(
+        self,
+        service: ChatHistoryService,
+        geometry_replay_payload: ToolCallExtractDTO,
+    ) -> None:
+        chain = await service.extract_tool_call_chain(geometry_replay_payload)
+
+        assert chain.missing_dependencies == []
+        assert [step.tool_call.tool_name for step in chain.execution_chain] == [
+            "GetProjectTerritory",
+            "GetServicesByGeometry",
+            "CreateRestrictionZones",
+            "GetServicesByGeometry",
+            "CheckDistanceFromSource",
+        ]
+        assert [step.order for step in chain.execution_chain] == [1, 2, 3, 4, 5]
+        assert chain.execution_chain[1].depends_on == [1]
+        assert chain.execution_chain[2].depends_on == [2]
+        assert chain.execution_chain[3].depends_on == [3]
+        assert 4 in chain.execution_chain[4].depends_on
 
     async def test_single_tool_call_has_no_dependencies(
         self, service: ChatHistoryService
@@ -203,6 +229,37 @@ class TestExtractToolCallChain:
 class TestProvidedAndRequiredRefs:
     """Special-cased provider/consumer extraction per tool name."""
 
+    @pytest.mark.parametrize("layer_name", ["Источники — Школа", None])
+    def test_geometry_fetch_provides_only_output_layer(
+        self, layer_name: str | None
+    ) -> None:
+        call = ToolCallSchema(
+            tool_name="GetServicesByGeometry",
+            arguments={
+                "services_names": ["Школа"],
+                "zones_layers": ["project_territory"],
+                "layer_name": layer_name,
+                "intersection_type": "intersects",
+            },
+        )
+
+        assert ChatHistoryService._provided_refs(call) == (
+            [layer_name] if layer_name else []
+        )
+        assert ChatHistoryService._required_refs(call) == ["project_territory"]
+
+    def test_geometry_fetch_requires_all_zone_layers(self) -> None:
+        call = ToolCallSchema(
+            tool_name="GetServicesByGeometry",
+            arguments={
+                "zones_layers": ["Зона 1", "Зона 2", "Зона 1"],
+                "services_names": ["Театр"],
+                "layer_name": "Цели — Театр",
+            },
+        )
+
+        assert ChatHistoryService._required_refs(call) == ["Зона 1", "Зона 2"]
+
     def test_get_services_provides_service_names(self) -> None:
         call = ToolCallSchema(
             tool_name="GetServices", arguments={"services_names": ["school", "park"]}
@@ -264,6 +321,21 @@ class TestProvidedAndRequiredRefs:
             "Детский сад",
         ]
 
+    @pytest.mark.parametrize(
+        "tool_name", ["CheckObjectAttributeThreshold", "CheckAccessibilityWithin"]
+    )
+    def test_additional_checks_require_input_layers(self, tool_name: str) -> None:
+        arguments = {"objects_layer": "Жилой дом"}
+        if tool_name == "CheckObjectAttributeThreshold":
+            arguments["project_layer"] = "project_territory"
+            expected = ["Жилой дом", "project_territory"]
+        else:
+            arguments["required_neighbor_layers"] = ["Цели — Школа"]
+            expected = ["Жилой дом", "Цели — Школа"]
+        call = ToolCallSchema(tool_name=tool_name, arguments=arguments)
+
+        assert ChatHistoryService._required_refs(call) == expected
+
     def test_explicit_depends_on_is_required(self) -> None:
         call = ToolCallSchema(
             tool_name="SomeTool", arguments={"depends_on": ["layer_a"]}
@@ -315,6 +387,52 @@ class TestToolCallFromPayload:
             ChatHistoryService._tool_call_from_payload({"arguments": {}}, 1)
 
         assert exc_info.value.status_code == 422
+
+
+class TestCompactToolCallHistory:
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "GetServicesByGeometry",
+            "CreateRestrictionZones",
+            "CheckDistanceFromSource",
+            "CheckObjectAttributeThreshold",
+            "CheckAccessibilityWithin",
+        ],
+    )
+    @pytest.mark.parametrize("key", ["calls", "tool_calls"])
+    @pytest.mark.parametrize("wrapped", [False, True])
+    def test_persisted_arguments_exclude_layers(
+        self, tool_name: str, key: str, wrapped: bool
+    ) -> None:
+        arguments = {
+            "layer_name": "Цели — Театр",
+            "zones_layers": ["Зона нормы"],
+            "layers": {"Зона нормы": {"type": "FeatureCollection", "features": []}},
+        }
+        function = {"name": tool_name, "arguments": arguments}
+        call = {"function": function} if wrapped else function
+        payload = {key: [call], "description": "Повтор проверки"}
+        message = MessageCreateDTO(
+            role="assistant",
+            parts=[MessagePartCreateDTO(kind="tool_call", payload=payload)],
+        )
+
+        stored = ChatHistoryService._build_parts(message, datetime.now(UTC))[0]
+        restored = ChatHistoryService._tool_calls_from_part(stored)[0]
+
+        assert restored.arguments == {
+            "layer_name": "Цели — Театр",
+            "zones_layers": ["Зона нормы"],
+        }
+        assert stored["payload"]["description"] == "Повтор проверки"
+        assert "layers" in arguments
+        assert (
+            "layers"
+            in message.parts[0]
+            .payload[key][0]
+            .get("function", message.parts[0].payload[key][0])["arguments"]
+        )
 
 
 class TestSmallHelpers:
