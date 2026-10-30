@@ -1,3 +1,9 @@
+## v0.7.1 (2026-10-30)
+
+[fix/ICII-226-replay-provided-refs](https://github.com/IDUclub/ChatStorage/pull/49) (#49)
+
+- fix: restore compliance replay dependencies and hide internal errors
+
 ## v0.7.0 (2026-10-29)
 
 [feat/ICII-226-compilance-vis-status](https://github.com/IDUclub/ChatStorage/pull/48) (#48)

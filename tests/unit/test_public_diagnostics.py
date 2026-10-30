@@ -6,7 +6,7 @@ from app.main import app
 
 def test_diagnostic_reads_are_public_and_writes_require_auth(tmp_path, monkeypatch):
     log_file = tmp_path / "app.log"
-    log_file.write_text("diagnostic log\n", encoding="utf-8")
+    log_file.write_text("diagnostic log\n", encoding="utf-8", newline="\n")
     monkeypatch.setenv("DIAGNOSTIC_TEST_SETTING", "original")
     app.dependency_overrides[get_logs_path] = lambda: log_file
     try:
