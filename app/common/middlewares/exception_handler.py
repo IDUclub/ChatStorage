@@ -1,7 +1,5 @@
 """Exception handling middleware is defined here."""
 
-import traceback
-
 from fastapi import FastAPI, Request
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -28,35 +26,6 @@ class ExceptionHandlerMiddleware(
 
         super().__init__(app)
 
-    @staticmethod
-    async def prepare_request_info(request: Request) -> dict:
-        """
-        Function prepares request input data
-        Args:
-            request (Request): Request instance.
-        Returns:
-            dict: Request input data.
-        """
-
-        request_info = {
-            "method": request.method,
-            "url": str(request.url),
-            "path_params": dict(request.path_params),
-            "query_params": dict(request.query_params),
-            "headers": dict(request.headers),
-        }
-
-        try:
-            request_info["body"] = await request.json()
-            return request_info
-        except:
-            try:
-                request_info["body"] = str(await request.body())
-                return request_info
-            except:
-                request_info["body"] = "Could not read request body"
-                return request_info
-
     async def dispatch(self, request: Request, call_next):
         """
         Dispatch function for sending errors to user from API
@@ -82,7 +51,6 @@ class ExceptionHandlerMiddleware(
                 },
             )
         except Exception as e:
-            request_info = await self.prepare_request_info(request)
             logger.exception(
                 "Unhandled request error: method={} path={} error_type={} detail={}",
                 request.method,
@@ -94,9 +62,5 @@ class ExceptionHandlerMiddleware(
                 status_code=500,
                 content={
                     "message": "Internal server error",
-                    "error_type": e.__class__.__name__,
-                    "request": request_info,
-                    "detail": str(e),
-                    "traceback": traceback.format_exc().splitlines(),
                 },
             )

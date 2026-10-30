@@ -735,6 +735,9 @@ class ChatHistoryService:
         if tool_call.tool_name == "GetServicesByGeometry":
             return cls._string_list(arguments.get("layer_name"))
 
+        if tool_call.tool_name in _LAYER_READING_TOOLS:
+            return cls._string_list(arguments.get("layer_name"))
+
         if tool_call.tool_name == "GetPhysicalObjects":
             return cls._string_list(arguments.get("physical_objects_names"))
 

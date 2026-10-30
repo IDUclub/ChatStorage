@@ -678,11 +678,12 @@ type FilePartPayload = {
 
 ```json
 {
-  "message": "Internal server error",
-  "error_type": "RuntimeError",
-  "detail": "..."
+  "message": "Internal server error"
 }
 ```
+
+Ответ `500` не содержит заголовков и тела запроса, текста исключения или traceback.
+Диагностика необработанного исключения остаётся в серверных логах.
 
 Рекомендация для UI:
 

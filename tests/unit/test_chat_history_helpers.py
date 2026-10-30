@@ -31,6 +31,65 @@ def service() -> ChatHistoryService:
 class TestExtractToolCallChain:
     """Dependency-chain reconstruction for stored tool calls."""
 
+    async def test_restriction_metadata_does_not_shadow_physical_objects(
+        self,
+        service: ChatHistoryService,
+        compliance_replay_payload: ToolCallExtractDTO,
+    ) -> None:
+        chain = await service.extract_tool_call_chain(compliance_replay_payload)
+
+        assert chain.missing_dependencies == []
+        assert [step.tool_call.tool_name for step in chain.execution_chain] == [
+            "GetProjectTerritory",
+            "GetServicesByGeometry",
+            "GetPhysicalObjects",
+            "CheckDistanceFromSource",
+        ]
+        assert chain.execution_chain[1].tool_call.arguments["layer_name"] == (
+            "Источники — Школа"
+        )
+        assert chain.execution_chain[-1].depends_on == [2, 3]
+
+    async def test_presence_check_replays_only_target_zone_providers(
+        self,
+        service: ChatHistoryService,
+        compliance_replay_payload: ToolCallExtractDTO,
+    ) -> None:
+        payload = ToolCallExtractDTO(
+            tool_call=ToolCallDTO(
+                step=10,
+                tool_name="CheckPresenceWithin",
+                arguments={
+                    "objects_layer": "Жилой дом",
+                    "required_neighbor_layers": ["Цели — Школа"],
+                },
+            ),
+            previous_tool_calls=compliance_replay_payload.previous_tool_calls,
+        )
+
+        chain = await service.extract_tool_call_chain(payload)
+
+        assert chain.missing_dependencies == []
+        assert [step.tool_call.tool_name for step in chain.execution_chain] == [
+            "GetPhysicalObjects",
+            "GetProjectTerritory",
+            "GetServicesByGeometry",
+            "CreateRestrictionZones",
+            "CreateRestrictionZones",
+            "GetServicesByGeometry",
+            "CheckPresenceWithin",
+        ]
+        zone_layers = [
+            step.tool_call.arguments["layer_name"]
+            for step in chain.execution_chain
+            if step.tool_call.tool_name == "CreateRestrictionZones"
+        ]
+        targets = chain.execution_chain[-2]
+        assert targets.tool_call.arguments["layer_name"] == "Цели — Школа"
+        assert zone_layers == targets.tool_call.arguments["zones_layers"]
+        assert targets.depends_on == [4, 5]
+        assert chain.execution_chain[-1].depends_on == [1, 6]
+
     async def test_geometry_fetch_chain(
         self,
         service: ChatHistoryService,
@@ -228,6 +287,55 @@ class TestExtractToolCallChain:
 
 class TestProvidedAndRequiredRefs:
     """Special-cased provider/consumer extraction per tool name."""
+
+    def test_restriction_zone_provides_only_output_layer(self) -> None:
+        call = ToolCallSchema(
+            tool_name="CreateRestrictionZones",
+            arguments={
+                "layer_name": "Зона ограничения — Школа",
+                "source_layer": "Источники — Школа",
+                "geometry_mode": "buffer",
+                "distance_m": 500,
+                "properties": {
+                    "applies_to": "Жилой дом",
+                    "restriction_id": "Норма 1",
+                    "template": "Проверка расстояния",
+                    "provenance": {"source": "СП 42"},
+                },
+            },
+        )
+
+        assert ChatHistoryService._provided_refs(call) == ["Зона ограничения — Школа"]
+
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "CheckDistanceFromSource",
+            "CheckDistanceTable",
+            "CheckPresenceWithin",
+            "CheckObjectAttributeThreshold",
+            "CheckAccessibilityWithin",
+            "CheckZonalAttributeThreshold",
+            "CheckZonalRatio",
+        ],
+    )
+    @pytest.mark.parametrize("layer_name", [None, "Результат проверки"])
+    def test_check_provides_only_explicit_output_layer(
+        self, tool_name: str, layer_name: str | None
+    ) -> None:
+        arguments = {
+            "objects_layer": "Жилой дом",
+            "required_neighbor_layers": ["Цели — Школа"],
+            "geometry_mode": "buffered",
+            "distance_m": 500,
+        }
+        if layer_name is not None:
+            arguments["layer_name"] = layer_name
+        call = ToolCallSchema(tool_name=tool_name, arguments=arguments)
+
+        assert ChatHistoryService._provided_refs(call) == (
+            [layer_name] if layer_name else []
+        )
 
     @pytest.mark.parametrize("layer_name", ["Источники — Школа", None])
     def test_geometry_fetch_provides_only_output_layer(
