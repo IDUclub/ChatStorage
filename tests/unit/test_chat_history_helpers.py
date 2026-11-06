@@ -90,26 +90,58 @@ class TestExtractToolCallChain:
         assert targets.depends_on == [4, 5]
         assert chain.execution_chain[-1].depends_on == [1, 6]
 
+    @pytest.mark.parametrize(
+        "tool_name,names_argument,source_name,target_name",
+        [
+            ("GetServicesByGeometry", "services_names", "Школа", "Театр"),
+            (
+                "GetPhysicalObjectsByGeometry",
+                "physical_objects_names",
+                "Жилой дом",
+                "Жилой дом",
+            ),
+        ],
+    )
     async def test_geometry_fetch_chain(
         self,
         service: ChatHistoryService,
         geometry_replay_payload: ToolCallExtractDTO,
+        tool_name: str,
+        names_argument: str,
+        source_name: str,
+        target_name: str,
     ) -> None:
-        chain = await service.extract_tool_call_chain(geometry_replay_payload)
+        payload = geometry_replay_payload.model_copy(deep=True)
+        source_layer = f"Источники — {source_name}"
+        target_layer = f"Цели — {target_name}"
+        for index, name, layer in (
+            (1, source_name, source_layer),
+            (3, target_name, target_layer),
+        ):
+            call = payload.previous_tool_calls[index]
+            call.tool_name = tool_name
+            call.arguments.pop("services_names")
+            call.arguments[names_argument] = [name]
+            call.arguments["layer_name"] = layer
+        payload.previous_tool_calls[2].arguments["source_layer"] = source_layer
+        payload.tool_call.arguments["source_layer"] = source_layer
+        payload.tool_call.arguments["targets"] = [target_layer]
+
+        chain = await service.extract_tool_call_chain(payload)
 
         assert chain.missing_dependencies == []
         assert [step.tool_call.tool_name for step in chain.execution_chain] == [
             "GetProjectTerritory",
-            "GetServicesByGeometry",
+            tool_name,
             "CreateRestrictionZones",
-            "GetServicesByGeometry",
+            tool_name,
             "CheckDistanceFromSource",
         ]
         assert [step.order for step in chain.execution_chain] == [1, 2, 3, 4, 5]
         assert chain.execution_chain[1].depends_on == [1]
         assert chain.execution_chain[2].depends_on == [2]
         assert chain.execution_chain[3].depends_on == [3]
-        assert 4 in chain.execution_chain[4].depends_on
+        assert chain.execution_chain[4].depends_on == [2, 4]
 
     async def test_single_tool_call_has_no_dependencies(
         self, service: ChatHistoryService
@@ -337,31 +369,49 @@ class TestProvidedAndRequiredRefs:
             [layer_name] if layer_name else []
         )
 
+    @pytest.mark.parametrize(
+        "tool_name,names_argument",
+        [
+            ("GetServicesByGeometry", "services_names"),
+            ("GetPhysicalObjectsByGeometry", "physical_objects_names"),
+        ],
+    )
     @pytest.mark.parametrize("layer_name", ["Источники — Школа", None])
     def test_geometry_fetch_provides_only_output_layer(
-        self, layer_name: str | None
+        self, tool_name: str, names_argument: str, layer_name: str | None
     ) -> None:
         call = ToolCallSchema(
-            tool_name="GetServicesByGeometry",
+            tool_name=tool_name,
             arguments={
-                "services_names": ["Школа"],
+                names_argument: ["Школа"],
                 "zones_layers": ["project_territory"],
                 "layer_name": layer_name,
                 "intersection_type": "intersects",
             },
         )
+        if layer_name is None:
+            call.arguments.pop("layer_name")
 
         assert ChatHistoryService._provided_refs(call) == (
             [layer_name] if layer_name else []
         )
         assert ChatHistoryService._required_refs(call) == ["project_territory"]
 
-    def test_geometry_fetch_requires_all_zone_layers(self) -> None:
+    @pytest.mark.parametrize(
+        "tool_name,names_argument",
+        [
+            ("GetServicesByGeometry", "services_names"),
+            ("GetPhysicalObjectsByGeometry", "physical_objects_names"),
+        ],
+    )
+    def test_geometry_fetch_requires_all_zone_layers(
+        self, tool_name: str, names_argument: str
+    ) -> None:
         call = ToolCallSchema(
-            tool_name="GetServicesByGeometry",
+            tool_name=tool_name,
             arguments={
                 "zones_layers": ["Зона 1", "Зона 2", "Зона 1"],
-                "services_names": ["Театр"],
+                names_argument: ["Театр"],
                 "layer_name": "Цели — Театр",
             },
         )
@@ -502,6 +552,7 @@ class TestCompactToolCallHistory:
         "tool_name",
         [
             "GetServicesByGeometry",
+            "GetPhysicalObjectsByGeometry",
             "CreateRestrictionZones",
             "CheckDistanceFromSource",
             "CheckObjectAttributeThreshold",

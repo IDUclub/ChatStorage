@@ -408,7 +408,9 @@ Authorization: Bearer <token>
 воспроизведение без immutable revision или снимка данных.
 
 `GetServicesByGeometry` читает ссылки `zones_layers` и предоставляет слой по значению
-`layer_name`. Поддерживается цепочка `GetProjectTerritory → GetServicesByGeometry
+`layer_name`. `GetPhysicalObjectsByGeometry` работает так же; в цепочке можно
+использовать любой из этих двух инструментов. Поддерживается цепочка
+`GetProjectTerritory → GetServicesByGeometry
 → CreateRestrictionZones → GetServicesByGeometry → Check*`: источники ищутся по
 `project_territory` с `buffer_m`, цели — по слоям зон. Накопленные слои передаются
 в аргумент `layers` и MCP meta; `layers` удаляется из сохраняемых вызовов этих

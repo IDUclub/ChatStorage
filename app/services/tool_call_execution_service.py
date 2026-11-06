@@ -32,6 +32,7 @@ _LAYER_TOOLS = frozenset(
         "CheckZonalRatio",
         "CreateRestrictionZones",
         "GetServicesByGeometry",
+        "GetPhysicalObjectsByGeometry",
     }
 )
 

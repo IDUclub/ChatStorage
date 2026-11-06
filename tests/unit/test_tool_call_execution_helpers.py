@@ -102,6 +102,7 @@ class TestMetaForToolCall:
         [
             "CheckDistanceFromSource",
             "GetServicesByGeometry",
+            "GetPhysicalObjectsByGeometry",
             "CheckObjectAttributeThreshold",
             "CheckAccessibilityWithin",
         ],
@@ -120,6 +121,7 @@ class TestArgumentsForToolCall:
         [
             "CheckDistanceFromSource",
             "GetServicesByGeometry",
+            "GetPhysicalObjectsByGeometry",
             "CheckObjectAttributeThreshold",
             "CheckAccessibilityWithin",
         ],
