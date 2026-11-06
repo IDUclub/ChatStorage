@@ -53,6 +53,7 @@ _LAYER_READING_TOOLS = frozenset(
         "CheckZonalRatio",
         "CreateRestrictionZones",
         "GetServicesByGeometry",
+        "GetPhysicalObjectsByGeometry",
     }
 )
 _LAYER_REF_ARGUMENTS = (
@@ -731,9 +732,6 @@ class ChatHistoryService:
         arguments = tool_call.arguments
         if tool_call.tool_name == "GetServices":
             return cls._string_list(arguments.get("services_names"))
-
-        if tool_call.tool_name == "GetServicesByGeometry":
-            return cls._string_list(arguments.get("layer_name"))
 
         if tool_call.tool_name in _LAYER_READING_TOOLS:
             return cls._string_list(arguments.get("layer_name"))
